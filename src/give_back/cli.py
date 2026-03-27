@@ -251,8 +251,8 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool) -> None:
     else:
         print_assessment(assessment, signal_names, signal_weights, verbose=verbose)
 
-    # Exit code
-    if not gate_passed or tier == Tier.RED:
-        sys.exit(1) if not gate_passed else None
+    # Exit codes: 0 = success, 1 = gate fail, 2 = incomplete (HIGH/GATE signal errored)
+    if not gate_passed:
+        sys.exit(1)
     if incomplete:
         sys.exit(2)

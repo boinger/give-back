@@ -128,7 +128,6 @@ class TestGhostClosing:
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_ghost_closing(data)
         assert result.low_sample is True
-        assert "(low sample)" in result.summary
 
     def test_old_prs_filtered_out(self):
         """PRs older than 12 months should be excluded."""

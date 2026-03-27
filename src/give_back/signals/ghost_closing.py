@@ -81,8 +81,6 @@ def evaluate_ghost_closing(data: RepoData) -> SignalResult:
 
     ghost_pct = round(ghost_rate * 100)
     summary = f"{ghost_pct}% of external PRs closed without feedback ({ghost_closed}/{external_closed})"
-    if low_sample:
-        summary += " (low sample)"
 
     return SignalResult(
         score=score,

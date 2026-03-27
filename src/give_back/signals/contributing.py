@@ -51,7 +51,7 @@ _FRICTION_CATEGORIES: list[tuple[list[re.Pattern[str]], float, str]] = [
 
 def evaluate_contributing_exists(data: RepoData) -> SignalResult:
     """Check whether a CONTRIBUTING file exists via the community profile."""
-    contributing = data.community.get("contributing")
+    contributing = data.community.get("files", {}).get("contributing")
     if contributing is not None:
         return SignalResult(
             score=1.0,

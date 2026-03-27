@@ -97,7 +97,6 @@ class TestPrMergeRate:
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_pr_merge_rate(data)
         assert result.low_sample is True
-        assert "(low sample)" in result.summary
 
     def test_exactly_10_prs_not_low_sample(self):
         """Exactly 10 external PRs should NOT flag low_sample."""

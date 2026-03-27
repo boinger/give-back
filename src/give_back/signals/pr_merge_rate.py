@@ -79,8 +79,6 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
 
     pct = round(merge_rate * 100)
     summary = f"{pct}% of external PRs merged ({external_merged}/{external_closed})"
-    if low_sample:
-        summary += " (low sample)"
 
     return SignalResult(
         score=merge_rate,

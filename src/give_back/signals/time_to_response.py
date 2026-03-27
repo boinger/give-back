@@ -168,8 +168,6 @@ def evaluate_time_to_response(data: RepoData) -> SignalResult:
         time_str = f"{round(median_hours / 24)}d"
 
     summary = f"Median first response: {time_str} ({len(response_hours)} PRs)"
-    if low_sample:
-        summary += " (low sample)"
 
     return SignalResult(
         score=score,

@@ -23,19 +23,25 @@ def _make_repo_data(
 
 class TestContributingExists:
     def test_present(self):
-        data = _make_repo_data(community={"contributing": {"url": "https://example.com"}})
+        data = _make_repo_data(community={"files": {"contributing": {"url": "https://example.com"}}})
         result = evaluate_contributing_exists(data)
         assert result.score == 1.0
         assert result.tier == Tier.GREEN
+        assert result.skip is False
 
     def test_absent_is_skipped(self):
-        data = _make_repo_data(community={"contributing": None})
+        data = _make_repo_data(community={"files": {"contributing": None}})
         result = evaluate_contributing_exists(data)
         assert result.skip is True
         assert "No CONTRIBUTING" in result.summary
 
-    def test_missing_key_is_skipped(self):
+    def test_missing_files_key_is_skipped(self):
         data = _make_repo_data(community={})
+        result = evaluate_contributing_exists(data)
+        assert result.skip is True
+
+    def test_empty_files_is_skipped(self):
+        data = _make_repo_data(community={"files": {}})
         result = evaluate_contributing_exists(data)
         assert result.skip is True
 

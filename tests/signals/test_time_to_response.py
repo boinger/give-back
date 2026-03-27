@@ -216,7 +216,6 @@ class TestTimeToResponse:
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_time_to_response(data)
         assert result.low_sample is True
-        assert "(low sample)" in result.summary
 
     def test_mixed_response_times(self):
         """Median of mixed response times."""
