@@ -66,13 +66,22 @@ def evaluate_license(data: RepoData) -> SignalResult:
     license_name = license_info.get("name", "Unknown")
     license_key = (license_info.get("key") or "").lower()
 
-    # GitHub sometimes returns "NOASSERTION" for unrecognized licenses
+    # GitHub sometimes returns "NOASSERTION" for unrecognized licenses.
+    # This is NOT a gate fail — the repo HAS a license, we just can't classify it.
+    # Pass the gate but flag for human review. Include the repo URL for the license
+    # file so the user can check it directly.
     if spdx_id in ("noassertion", "") and license_key in ("other", ""):
+        license_url = f"https://github.com/{data.owner}/{data.repo}/blob/HEAD/LICENSE"
         return SignalResult(
-            score=-1.0,
-            tier=Tier.RED,
-            summary=f"Unrecognized license: {license_name}",
-            details={"license": license_name, "spdx_id": spdx_id},
+            score=1.0,
+            tier=Tier.YELLOW,
+            summary=f"Unrecognized license ({license_name}) — verify at {license_url}",
+            details={
+                "license": license_name,
+                "spdx_id": spdx_id,
+                "needs_human": True,
+                "license_url": license_url,
+            },
         )
 
     # Check for problematic "source available" licenses

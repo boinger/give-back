@@ -53,12 +53,13 @@ class TestLicenseGate:
         assert result.score == -1.0
         assert result.tier == Tier.RED
 
-    def test_noassertion_fails(self):
+    def test_noassertion_needs_human_review(self):
         data = _make_repo_data({"spdxId": "NOASSERTION", "name": "Other", "key": "other"})
         result = evaluate_license(data)
-        assert result.score == -1.0
-        assert result.tier == Tier.RED
-        assert "Unrecognized" in result.summary
+        assert result.score == 1.0  # Gate passes — has a license, just unrecognized
+        assert result.tier == Tier.YELLOW
+        assert "verify at" in result.summary
+        assert result.details["needs_human"] is True
 
     def test_unknown_license_passes(self):
         """A license with a valid spdxId that's not in our known lists should still pass."""

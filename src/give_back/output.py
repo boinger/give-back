@@ -78,7 +78,12 @@ def print_assessment(
             tier_color = _TIER_COLORS.get(result.tier, "white")
             tier_display = result.tier.value.upper()
             if weight == SignalWeight.GATE:
-                tier_display = "PASS" if result.score >= 0 else "FAIL"
+                if result.score < 0:
+                    tier_display = "FAIL"
+                elif result.details.get("needs_human"):
+                    tier_display = "REVIEW"
+                else:
+                    tier_display = "PASS"
             finding = result.summary
             if result.low_sample:
                 finding += " [dim](low sample)[/dim]"
