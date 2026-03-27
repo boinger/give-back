@@ -56,8 +56,12 @@ make pre-commit    # format + lint + test
 make test          # run tests
 make lint          # run ruff
 make run ARGS='assess pallets/flask'       # viability gate
+make run ARGS='assess pallets/flask --deps'  # viability + dep walk
+make run ARGS='deps traefik/traefik'      # walk deps only
 make run ARGS='triage pallets/flask'      # find starter issues
 make run ARGS='sniff pallets/flask 123'   # inspect issue code quality
+make run ARGS='skip google/protobuf'      # add to skip list
+make run ARGS='unskip google/protobuf'    # remove from skip list
 ```
 
 ## Key Files

@@ -373,8 +373,8 @@ def print_deps(walk_result: WalkResult, verbose: bool = False) -> None:
         tier_color = _TIER_COLORS.get(tier, "white")
         tier_label = tier.value.upper()
 
-        merge_rate = _extract_signal_detail(dep.assessment, "merge rate", "merge_rate")
-        response_time = _extract_signal_detail(dep.assessment, "response", "median_hours")
+        merge_rate = _extract_signal_detail(dep.assessment, "merged", "merge_rate")
+        response_time = _extract_signal_detail(dep.assessment, "first response", "median_hours")
 
         notes_parts = []
         if dep.from_cache:

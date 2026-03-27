@@ -42,6 +42,16 @@ give-back assess pallets/flask --verbose
 # Skip cached results
 give-back assess pallets/flask --no-cache
 
+# Walk dependencies and find contribution opportunities
+give-back deps traefik/traefik
+
+# Combine viability assessment + dep walk
+give-back assess pallets/flask --deps
+
+# Skip repos from dep-walking results
+give-back skip google/protobuf
+give-back unskip google/protobuf
+
 # Find good starter issues (Phase 2)
 give-back triage pallets/flask
 
