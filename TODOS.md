@@ -26,8 +26,8 @@ falls back to manual review link when no API key is available.
 
 ## Future work
 
-- **Phase 3: Convention Scan** — shallow clone, analyze commit messages, PR templates,
-  branch naming, test expectations, code style. Produces a "contribution brief."
+- ~~**Phase 3: Convention Scan**~~ DONE — `give-back conventions` clones, analyzes
+  commit format, merge strategy, PR templates, branch naming, DCO, tests, style.
 - **Phase 4: Fork/Fix/PR** — fork, create branch, hand off to Claude Code with the
   contribution brief, write fix, run tests, populate PR description.
 - **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
