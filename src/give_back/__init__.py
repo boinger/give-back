@@ -1,0 +1,6 @@
+"""give-back: Evaluate whether an open-source project is viable for outside contributions."""
+
+try:
+    from give_back._version import __version__
+except ImportError:
+    __version__ = "0.0.0.dev0"
