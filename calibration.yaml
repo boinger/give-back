@@ -1,0 +1,30 @@
+# Calibration repos — known contribution friendliness
+# Based on demo runs and manual evaluation
+
+# Major framework — accepts PRs but selective (fast response, low merge rate)
+- repo: pallets/flask
+  expected: yellow
+
+# Clearly friendly — actively merge external PRs
+- repo: Django1982/ankermake-m5-protocol
+  expected: green
+- repo: expr-lang/expr
+  expected: green
+- repo: Pometry/Raphtory
+  expected: green
+- repo: traefik/traefik
+  expected: green
+
+# Friendly but with caveats (custom license, mixed signals)
+- repo: databricks/terraform-provider-databricks
+  expected: green
+- repo: chatmail/core
+  expected: green
+
+# Read-only mirror — PRs not accepted here
+- repo: PostHog/posthog-foss
+  expected: yellow
+
+# Small academic project — friendly but low activity
+- repo: ROBelgium/MSNoise
+  expected: green

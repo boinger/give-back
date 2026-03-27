@@ -37,3 +37,11 @@ class GraphQLError(GiveBackError):
 
 class StateCorruptError(GiveBackError):
     """State file exists but contains invalid JSON or unexpected schema."""
+
+
+class ForkError(GiveBackError):
+    """Fork operation failed — gh CLI missing, not authenticated, or fork API error."""
+
+
+class WorkspaceError(GiveBackError):
+    """Workspace setup failed — clone error, wrong remote, or dirty branch."""

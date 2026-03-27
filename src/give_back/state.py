@@ -13,10 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from give_back.exceptions import StateCorruptError
-from give_back.models import Assessment
+from give_back.models import Assessment, Config
 
 STATE_DIR = Path.home() / ".give-back"
 STATE_FILE = STATE_DIR / "state.json"
+CONFIG_FILE = STATE_DIR / "config.yaml"
 
 _SCHEMA_VERSION = 1
 _DEFAULT_CACHE_TTL_HOURS = 24
@@ -160,3 +161,66 @@ def _backup_corrupt_state() -> None:
     if STATE_FILE.exists():
         backup = STATE_FILE.with_suffix(".json.bak")
         shutil.copy2(STATE_FILE, backup)
+
+
+# --- Config management ---
+
+
+def load_config() -> Config:
+    """Load user config from ~/.give-back/config.yaml.
+
+    Returns defaults if file doesn't exist or is invalid.
+    Simple key-value parser — no PyYAML dependency.
+    """
+    if not CONFIG_FILE.exists():
+        return Config()
+
+    try:
+        content = CONFIG_FILE.read_text()
+        return _parse_config_yaml(content)
+    except Exception:
+        import sys
+
+        print("Warning: Config file invalid, using defaults.", file=sys.stderr)
+        return Config()
+
+
+def _parse_config_yaml(content: str) -> Config:
+    """Parse a minimal YAML config (two fields, one nested level).
+
+    Supports:
+      workspace_dir: ~/path
+      handoff:
+        command: "some command"
+    """
+    workspace_dir = Config.workspace_dir
+    handoff_command = None
+
+    in_handoff = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped.startswith("workspace_dir:"):
+            value = stripped.split(":", 1)[1].strip().strip("\"'")
+            if value:
+                workspace_dir = value
+            in_handoff = False
+
+        elif stripped == "handoff:" or stripped.startswith("handoff:"):
+            # Check if there's an inline value (shouldn't be, but handle it)
+            after = stripped.split(":", 1)[1].strip()
+            if after and after not in ("null", "~"):
+                handoff_command = after.strip("\"'")
+                in_handoff = False
+            else:
+                in_handoff = True
+
+        elif in_handoff and stripped.startswith("command:"):
+            value = stripped.split(":", 1)[1].strip().strip("\"'")
+            if value and value not in ("null", "~"):
+                handoff_command = value
+            in_handoff = False
+
+    return Config(workspace_dir=workspace_dir, handoff_command=handoff_command)

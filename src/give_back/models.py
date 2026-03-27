@@ -116,3 +116,14 @@ class Assessment:
 
     timestamp: str
     """ISO 8601 timestamp of when the assessment was performed."""
+
+
+@dataclass
+class Config:
+    """User configuration from ~/.give-back/config.yaml."""
+
+    workspace_dir: str = "~/give-back-workspaces"
+    """Directory where contribution workspaces are created."""
+
+    handoff_command: str | None = None
+    """Command to run after workspace is set up (e.g., 'claude', 'cursor .', 'code .')."""
