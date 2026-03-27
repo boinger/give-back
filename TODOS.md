@@ -1,17 +1,11 @@
 # TODOs
 
-## Phase 1b: Dependency Walking
-**Priority:** P1 | **Effort:** M (human: ~3d / CC: ~25min)
-**Depends on:** Phase 1 scoring thresholds calibrated against real repos
+## ~~Phase 1b: Dependency Walking~~ DONE
 
-Add `--deps` flag that parses go.mod/pyproject.toml, resolves package names to
-GitHub repos via PyPI/Go module APIs, runs the viability gate on each dependency
-(up to 20), shows progress bar. Requires auth for batch API calls. Includes
-skip/unskip CLI commands and skip list filtering.
-
-**Why:** The architecture doc's primary use case — "point at a project, find
-contribution opportunities in its dependency tree." Deferred from Phase 1 because
-scoring thresholds need real-world calibration before amplifying across 20 deps.
+Implemented: `give-back deps`, `--deps` flag on `assess`, `skip`/`unskip` commands.
+Supports go.mod, pyproject.toml (PEP 621 + Poetry), requirements.txt.
+Resolves via PyPI API and Go module paths. Filters stdlib, same-org, archived,
+skip list, mega-projects.
 
 ## Phase 1.1: authorAssociation Bias Reconciliation
 **Priority:** P1 | **Effort:** S (human: ~2d / CC: ~15min)
