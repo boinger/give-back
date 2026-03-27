@@ -49,10 +49,10 @@ def _release_cadence_score(data: RepoData) -> tuple[float, str]:
 
     recent_count = 0
     for node in nodes:
-        published_at = node.get("publishedAt")
-        if not published_at:
+        created_at = node.get("createdAt")
+        if not created_at:
             continue
-        pub_date = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        pub_date = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         if pub_date >= one_year_ago:
             recent_count += 1
 

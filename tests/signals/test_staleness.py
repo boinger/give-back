@@ -30,7 +30,7 @@ def _make_repo_data(
     release_nodes = []
     if releases:
         for dt in releases:
-            release_nodes.append({"publishedAt": _iso(dt)})
+            release_nodes.append({"createdAt": _iso(dt)})
     repo["releases"] = {"nodes": release_nodes}
 
     repo["openIssues"] = {"totalCount": open_issues}
