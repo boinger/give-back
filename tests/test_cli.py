@@ -1,6 +1,5 @@
 """Tests for CLI commands and repo argument parsing."""
 
-
 import pytest
 from click.testing import CliRunner
 
