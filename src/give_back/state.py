@@ -119,6 +119,42 @@ def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_C
     return entry
 
 
+def add_to_skip_list(slug: str) -> None:
+    """Add an owner/repo slug to the skip list (deduplicated, case-preserved)."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        state = _empty_state()
+
+    existing = state.setdefault("skip_list", [])
+    # Deduplicate case-insensitively
+    if slug.lower() not in {s.lower() for s in existing}:
+        existing.append(slug)
+        save_state(state)
+
+
+def remove_from_skip_list(slug: str) -> None:
+    """Remove an owner/repo slug from the skip list (case-insensitive match)."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        state = _empty_state()
+
+    existing = state.setdefault("skip_list", [])
+    state["skip_list"] = [s for s in existing if s.lower() != slug.lower()]
+    save_state(state)
+
+
+def get_skip_list() -> list[str]:
+    """Return the current skip list."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        return []
+
+    return state.get("skip_list", [])
+
+
 def _backup_corrupt_state() -> None:
     """Back up a corrupt state file before recreating."""
     if STATE_FILE.exists():

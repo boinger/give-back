@@ -10,8 +10,11 @@ from give_back.exceptions import StateCorruptError
 from give_back.models import Assessment, SignalResult, Tier
 from give_back.state import (
     _empty_state,
+    add_to_skip_list,
     get_cached_assessment,
+    get_skip_list,
     load_state,
+    remove_from_skip_list,
     save_assessment,
     save_state,
 )
@@ -119,3 +122,44 @@ class TestSaveAssessment:
 
     def test_nonexistent_repo_returns_none(self, state_dir):
         assert get_cached_assessment("no", "such") is None
+
+
+class TestSkipList:
+    def test_add_to_skip_list(self, state_dir):
+        add_to_skip_list("google/protobuf")
+        assert "google/protobuf" in get_skip_list()
+
+    def test_add_deduplicates_case_insensitive(self, state_dir):
+        add_to_skip_list("google/protobuf")
+        add_to_skip_list("Google/Protobuf")
+        add_to_skip_list("google/protobuf")
+        assert len(get_skip_list()) == 1
+
+    def test_remove_from_skip_list(self, state_dir):
+        add_to_skip_list("google/protobuf")
+        add_to_skip_list("encode/httpx")
+        remove_from_skip_list("google/protobuf")
+        skip = get_skip_list()
+        assert "google/protobuf" not in skip
+        assert "encode/httpx" in skip
+
+    def test_remove_case_insensitive(self, state_dir):
+        add_to_skip_list("Google/Protobuf")
+        remove_from_skip_list("google/protobuf")
+        assert len(get_skip_list()) == 0
+
+    def test_get_skip_list_empty(self, state_dir):
+        assert get_skip_list() == []
+
+    def test_get_skip_list_after_corrupt_state(self, state_dir):
+        _, state_file = state_dir
+        state_file.write_text("not json")
+        # get_skip_list handles StateCorruptError gracefully
+        assert get_skip_list() == []
+
+    def test_add_after_corrupt_state(self, state_dir):
+        _, state_file = state_dir
+        state_file.write_text("not json")
+        # add_to_skip_list handles StateCorruptError by recreating state
+        add_to_skip_list("encode/httpx")
+        assert "encode/httpx" in get_skip_list()

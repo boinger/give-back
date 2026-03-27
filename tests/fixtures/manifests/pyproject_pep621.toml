@@ -1,0 +1,15 @@
+[project]
+name = "myproject"
+version = "1.0.0"
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "rich[jupyter]>=13.0",
+    "some-package ==1.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+]
