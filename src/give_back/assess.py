@@ -12,6 +12,7 @@ from rich.console import Console
 
 from give_back.github_client import GitHubClient
 from give_back.models import Assessment, SignalResult, Tier
+from give_back.reconcile import reconcile_merge_rate, should_reconcile
 from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
 
@@ -46,8 +47,23 @@ def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = 
             signal_results.append((signal_def.weight, None))
             successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))
 
-    # Score
+    # Score (first pass)
     tier, gate_passed, incomplete = compute_tier(signal_results)
+
+    # Bias reconciliation: if PR merge rate looks suspiciously low but other signals
+    # are healthy, investigate collaborator role transitions and re-score if warranted.
+    signal_names = [s.name for s in ALL_SIGNALS]
+    if should_reconcile(signal_results, signal_names):
+        # Find the merge rate signal index
+        for i, signal_def in enumerate(ALL_SIGNALS):
+            if "merge" in signal_def.name.lower() and successful_results[i].score < 0.4:
+                adjusted = reconcile_merge_rate(client, owner, repo, successful_results[i], verbose=verbose)
+                if adjusted is not None:
+                    successful_results[i] = adjusted
+                    signal_results[i] = (signal_def.weight, adjusted)
+                    # Re-score with adjusted signal
+                    tier, gate_passed, incomplete = compute_tier(signal_results)
+                break
 
     # Build assessment
     now = datetime.now(timezone.utc).isoformat()

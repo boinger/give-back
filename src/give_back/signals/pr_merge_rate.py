@@ -41,6 +41,7 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
     external_merged = 0
     external_closed = 0
     collaborator_pr_count = 0
+    collaborator_authors: list[str] = []
 
     for pr in prs:
         # Apply 12-month window filter on closedAt/mergedAt
@@ -53,9 +54,12 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
 
         association = pr.get("authorAssociation", "NONE")
 
-        # Track collaborator PRs for bias warning
+        # Track collaborator PRs and authors for bias reconciliation
         if association == "COLLABORATOR":
             collaborator_pr_count += 1
+            author_login = (pr.get("author") or {}).get("login")
+            if author_login and author_login not in collaborator_authors:
+                collaborator_authors.append(author_login)
 
         # Skip internal PRs
         if association in INTERNAL_ASSOCIATIONS:
@@ -71,7 +75,12 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
             score=0.5,
             tier=score_to_tier(0.5),
             summary="No external PRs found in the last 12 months",
-            details={"external_merged": 0, "external_closed": 0, "collaborator_pr_count": collaborator_pr_count},
+            details={
+                "external_merged": 0,
+                "external_closed": 0,
+                "collaborator_pr_count": collaborator_pr_count,
+                "collaborator_prs": collaborator_authors,
+            },
         )
 
     merge_rate = external_merged / external_closed
@@ -89,6 +98,7 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
             "external_closed": external_closed,
             "merge_rate": round(merge_rate, 3),
             "collaborator_pr_count": collaborator_pr_count,
+            "collaborator_prs": collaborator_authors,
         },
         low_sample=low_sample,
     )
