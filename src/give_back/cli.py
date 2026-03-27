@@ -23,7 +23,7 @@ from give_back.exceptions import (
 from give_back.github_client import GitHubClient
 from give_back.graphql.queries import VIABILITY_QUERY
 from give_back.models import Assessment, RepoData, SignalWeight, Tier
-from give_back.output import print_assessment, print_assessment_json, print_cached_notice
+from give_back.output import print_assessment, print_assessment_json, print_cached_notice, print_sniff, print_sniff_json
 from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
 from give_back.state import get_cached_assessment, save_assessment
@@ -256,3 +256,41 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool) -> None:
         sys.exit(1)
     if incomplete:
         sys.exit(2)
+
+
+@cli.command()
+@click.argument("repo")
+@click.argument("issue_number", type=int)
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON instead of formatted table.")
+def sniff(repo: str, issue_number: int, json_output: bool) -> None:
+    """Assess code quality for files referenced in a GitHub issue.
+
+    REPO can be 'owner/repo' or a full GitHub URL. ISSUE_NUMBER is the issue to inspect.
+    """
+    from give_back.sniff.assess import assess_issue
+
+    try:
+        owner, repo_name = _parse_repo(repo)
+    except click.BadParameter as exc:
+        _console.print(f"[red]Error:[/red] {exc.format_message()}")
+        sys.exit(1)
+
+    token = resolve_token()
+
+    try:
+        with GitHubClient(token=token) as client:
+            result = assess_issue(client, owner, repo_name, issue_number)
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RepoNotFoundError:
+        _console.print(f"[red]Error:[/red] Issue #{issue_number} not found in {owner}/{repo_name}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    if json_output:
+        print_sniff_json(result)
+    else:
+        print_sniff(result)
