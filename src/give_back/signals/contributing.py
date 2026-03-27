@@ -64,6 +64,7 @@ def evaluate_contributing_exists(data: RepoData) -> SignalResult:
         tier=score_to_tier(0.0),
         summary="No CONTRIBUTING file found",
         details={"contributing": False},
+        skip=True,  # Absence is a non-signal, not a negative signal
     )
 
 
@@ -72,10 +73,11 @@ def evaluate_contributing_content(data: RepoData) -> SignalResult:
     text = data.contributing_text
     if text is None:
         return SignalResult(
-            score=0.5,
-            tier=score_to_tier(0.5),
-            summary="no content to analyze",
+            score=0.0,
+            tier=score_to_tier(0.0),
+            summary="No content to analyze",
             details={"reason": "no_contributing_text"},
+            skip=True,  # No file = nothing to score, not a negative
         )
 
     found: list[str] = []

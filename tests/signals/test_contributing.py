@@ -28,16 +28,16 @@ class TestContributingExists:
         assert result.score == 1.0
         assert result.tier == Tier.GREEN
 
-    def test_absent(self):
+    def test_absent_is_skipped(self):
         data = _make_repo_data(community={"contributing": None})
         result = evaluate_contributing_exists(data)
-        assert result.score == 0.0
-        assert result.tier == Tier.RED
+        assert result.skip is True
+        assert "No CONTRIBUTING" in result.summary
 
-    def test_missing_key(self):
+    def test_missing_key_is_skipped(self):
         data = _make_repo_data(community={})
         result = evaluate_contributing_exists(data)
-        assert result.score == 0.0
+        assert result.skip is True
 
 
 class TestContributingContent:
@@ -76,12 +76,11 @@ class TestContributingContent:
         assert result.tier == Tier.GREEN
         assert "No friction" in result.summary
 
-    def test_no_text(self):
+    def test_no_text_is_skipped(self):
         data = _make_repo_data(contributing_text=None)
         result = evaluate_contributing_content(data)
-        assert result.score == 0.5
-        assert result.tier == Tier.YELLOW
-        assert "no content to analyze" in result.summary
+        assert result.skip is True
+        assert "No content" in result.summary
 
     def test_multiple_indicators_uses_lowest(self):
         """CLA (0.3) + DCO (0.6) → should use 0.3."""

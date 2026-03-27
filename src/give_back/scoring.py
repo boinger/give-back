@@ -66,6 +66,8 @@ def compute_tier(
             continue
         if weight == SignalWeight.GATE:
             continue
+        if result.skip:
+            continue  # No data — not a failure, just absent. Drop from average.
 
         multiplier = WEIGHT_MULTIPLIERS.get(weight, 1)
         weighted_sum += result.score * multiplier

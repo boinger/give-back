@@ -122,3 +122,17 @@ class TestIncompleteAssessment:
         tier, gate_passed, incomplete = compute_tier(results)
         assert incomplete is True
         assert tier == Tier.YELLOW  # No data, but incomplete caps at YELLOW
+
+    def test_skipped_signal_dropped_from_average(self):
+        """A signal with skip=True should not affect the weighted average."""
+        skipped = SignalResult(score=0.0, tier=Tier.RED, summary="skipped", skip=True)
+        results = [
+            (SignalWeight.GATE, _result(1.0, Tier.GREEN)),
+            (SignalWeight.HIGH, _result(0.9)),
+            (SignalWeight.LOW, (SignalWeight.LOW, skipped)[1]),  # skip=True, score=0.0
+        ]
+        # Without skip: (0.9*3 + 0.0*1) / (3+1) = 2.7/4 = 0.675 → YELLOW
+        # With skip: (0.9*3) / 3 = 0.9 → GREEN
+        tier, gate_passed, incomplete = compute_tier(results)
+        assert tier == Tier.GREEN
+        assert incomplete is False

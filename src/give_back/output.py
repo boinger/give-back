@@ -68,16 +68,20 @@ def print_assessment(
     table.add_column("Finding", min_width=40)
 
     for name, weight, result in zip(signal_names, signal_weights, assessment.signals):
-        tier_color = _TIER_COLORS.get(result.tier, "white")
         weight_label = _WEIGHT_LABELS.get(weight, str(weight.value))
 
-        tier_display = result.tier.value.upper()
-        if weight == SignalWeight.GATE:
-            tier_display = "PASS" if result.score >= 0 else "FAIL"
-
-        finding = result.summary
-        if result.low_sample:
-            finding += " [dim](low sample)[/dim]"
+        if result.skip:
+            tier_display = "—"
+            tier_color = "dim"
+            finding = f"[dim]{result.summary}[/dim]"
+        else:
+            tier_color = _TIER_COLORS.get(result.tier, "white")
+            tier_display = result.tier.value.upper()
+            if weight == SignalWeight.GATE:
+                tier_display = "PASS" if result.score >= 0 else "FAIL"
+            finding = result.summary
+            if result.low_sample:
+                finding += " [dim](low sample)[/dim]"
 
         table.add_row(
             name,

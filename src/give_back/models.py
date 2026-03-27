@@ -50,6 +50,10 @@ class SignalResult:
     low_sample: bool = False
     """True if <10 data points; shown as caveat in output."""
 
+    skip: bool = False
+    """True if there's no data to evaluate (e.g., no CONTRIBUTING.md).
+    Scoring drops skipped signals from the weighted average. Output shows '—'."""
+
 
 def score_to_tier(score: float) -> Tier:
     """Convert a numeric score (0.0-1.0) to a tier."""
