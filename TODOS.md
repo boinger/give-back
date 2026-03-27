@@ -7,39 +7,29 @@ Supports go.mod, pyproject.toml (PEP 621 + Poetry), requirements.txt.
 Resolves via PyPI API and Go module paths. Filters stdlib, same-org, archived,
 skip list, mega-projects.
 
-## Phase 1.1: authorAssociation Bias Reconciliation
-**Priority:** P1 | **Effort:** S (human: ~2d / CC: ~15min)
-**Depends on:** Phase 1 scoring thresholds calibrated
+## ~~Phase 1.1: authorAssociation Bias Reconciliation~~ DONE
 
-When PR merge rate scores LOW/RED but other signals suggest a healthy project,
-investigate collaborator role transitions via additional API calls. Re-score if
-external contributors were later promoted to collaborator (making their historical
-PRs appear "internal"). Currently Phase 1 shows a --verbose warning only.
+Implemented in reconcile.py. Conditional two-phase assessment: if PR merge rate
+is suspiciously low but other signals are healthy, investigates collaborator role
+transitions via search API. Re-scores if transitions found. Max 5 author lookups.
 
-**Why:** The authorAssociation bias systematically penalizes the healthiest repos —
-the ones that promote active contributors. Calibration first tells us whether this
-is a real problem or a theoretical one.
+## ~~Scoring Threshold Auto-Calibration~~ DONE
 
-## Scoring Threshold Auto-Calibration
-**Priority:** P2 | **Effort:** S (human: ~2d / CC: ~15min)
-**Depends on:** Phase 1 shipped
+Implemented: `give-back calibrate repos.yaml`. Accepts YAML/JSON with expected
+tiers, runs assessments, outputs confusion matrix + accuracy + threshold suggestions.
 
-Add `give-back calibrate` command that runs the gate against a user-provided list
-of repos with known friendliness ratings (YAML file mapping repos to expected tiers).
-Outputs a confusion matrix and suggests threshold adjustments. Makes calibration
-repeatable as signals evolve.
+## ~~LLM-Assisted License Evaluation~~ DONE
 
-## LLM-Assisted License Evaluation
-**Priority:** P2 | **Effort:** S (human: ~1d / CC: ~15min)
-**Depends on:** Phase 1 shipped
+Implemented in license_eval.py. When license gate returns REVIEW and ANTHROPIC_API_KEY
+is set, fetches LICENSE file and asks Claude Haiku to classify it. Purely additive —
+falls back to manual review link when no API key is available.
 
-When the license gate encounters an unrecognized license (SPDX "NOASSERTION" /
-"Other"), fetch the LICENSE file text via REST contents API and pass it to an LLM
-for classification. The LLM provides an estimate ("this looks like a permissive
-license with X clause") while the user still makes the final call. Currently Phase 1
-links to the LICENSE file URL for manual review.
+## Future work
 
-**Why:** Many legitimate OSS projects use custom or less-common licenses that
-GitHub's SPDX classifier doesn't recognize. An LLM can read the actual text and
-give a useful first-pass assessment, reducing the manual review burden. This crosses
-the "no LLM in Phase 1" boundary, so it ships as a later enhancement.
+- **Phase 3: Convention Scan** — shallow clone, analyze commit messages, PR templates,
+  branch naming, test expectations, code style. Produces a "contribution brief."
+- **Phase 4: Fork/Fix/PR** — fork, create branch, hand off to Claude Code with the
+  contribution brief, write fix, run tests, populate PR description.
+- **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
+- **Go module proxy resolution** — resolve gopkg.in, k8s.io and other non-GitHub Go hosts.
+- **PR pagination** — paginate to fill the 12-month window for prolific repos.
