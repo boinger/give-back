@@ -13,17 +13,28 @@ give-back evaluates open-source repos for contribution viability using GitHub AP
 
 ```
 CLI (cli.py)
+  ├── assess ──► auth → github_client → signals → scoring → output
+  │     ├── signals/ (9 pure functions, each returns SignalResult)
+  │     ├── scoring.py ──► signal results ──► Tier (GREEN/YELLOW/RED)
+  │     └── state.py ──► ~/.give-back/state.json (assessment cache)
+  ├── triage ──► fetch issues → check competition → rank → output
+  │     ├── triage/fetch.py ──► REST issues API → filter + score
+  │     ├── triage/compete.py ──► search for linked PRs + claim comments
+  │     └── triage/rank.py ──► multi-level sort by friendliness
+  ├── sniff ──► identify files → fetch content → heuristic assessment
+  │     ├── sniff/files.py ──► extract file paths from issue body
+  │     └── sniff/assess.py ──► file size, tests, churn, nesting → verdict
   ├── auth.py ──► GITHUB_TOKEN / gh CLI / unauthenticated
   ├── github_client.py ──► httpx ──► GitHub API (GraphQL + REST)
-  ├── signals/ (9 pure functions, each returns SignalResult)
-  │     └── all consume RepoData, registered via SignalDef NamedTuple
-  ├── scoring.py ──► signal results ──► Tier (GREEN/YELLOW/RED)
-  ├── state.py ──► ~/.give-back/state.json (assessment cache)
-  └── output.py ──► rich (table + summary)
+  └── output.py ──► rich (tables + summaries + JSON)
 ```
 
-**Data flow:** 4 API calls populate RepoData → 9 signals evaluate independently →
+**Phase 1 (assess):** 4 API calls populate RepoData → 9 signals evaluate independently →
 scoring computes weighted tier → output formats for terminal or JSON.
+
+**Phase 2 (triage + sniff):** Fetch open issues → filter by labels/activity/clarity →
+check for competing PRs and claim comments → rank by friendliness. Sniff inspects
+referenced source files for code quality heuristics.
 
 **Signal architecture:** Pure functions `(RepoData) -> SignalResult`. No ABC — each
 signal is wrapped in `SignalDef(func, name, weight)` NamedTuple. Registry is an explicit
@@ -44,7 +55,9 @@ list in `signals/__init__.py`.
 make pre-commit    # format + lint + test
 make test          # run tests
 make lint          # run ruff
-make run ARGS='assess pallets/flask'  # run CLI
+make run ARGS='assess pallets/flask'       # viability gate
+make run ARGS='triage pallets/flask'      # find starter issues
+make run ARGS='sniff pallets/flask 123'   # inspect issue code quality
 ```
 
 ## Key Files
@@ -57,3 +70,8 @@ make run ARGS='assess pallets/flask'  # run CLI
 | `src/give_back/scoring.py` | Weighted tier computation |
 | `src/give_back/github_client.py` | httpx wrapper for GitHub API |
 | `src/give_back/graphql/queries.py` | GraphQL query strings |
+| `src/give_back/triage/fetch.py` | Issue fetching + filtering |
+| `src/give_back/triage/compete.py` | Competing work detection |
+| `src/give_back/triage/rank.py` | Candidate ranking |
+| `src/give_back/sniff/files.py` | File path extraction + content fetch |
+| `src/give_back/sniff/assess.py` | Heuristic code quality assessment |

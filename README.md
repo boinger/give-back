@@ -41,6 +41,15 @@ give-back assess pallets/flask --verbose
 
 # Skip cached results
 give-back assess pallets/flask --no-cache
+
+# Find good starter issues (Phase 2)
+give-back triage pallets/flask
+
+# Filter by label
+give-back triage pallets/flask --label "good first issue"
+
+# Inspect code quality for a specific issue
+give-back sniff pallets/flask 5432
 ```
 
 ## Authentication
