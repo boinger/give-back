@@ -1,0 +1,169 @@
+"""Terminal output formatting for give-back assessments.
+
+Produces a rich table with signal breakdown and a natural-language summary.
+"""
+
+from __future__ import annotations
+
+import json
+
+from rich.console import Console
+from rich.table import Table
+
+from give_back.models import Assessment, SignalWeight, Tier
+
+_console = Console()
+
+_TIER_COLORS = {
+    Tier.GREEN: "green",
+    Tier.YELLOW: "yellow",
+    Tier.RED: "red",
+}
+
+_TIER_LABELS = {
+    Tier.GREEN: "GREEN — Viable for outside contributions",
+    Tier.YELLOW: "YELLOW — Mixed signals, proceed with caution",
+    Tier.RED: "RED — Not viable for outside contributions",
+}
+
+_WEIGHT_LABELS = {
+    SignalWeight.GATE: "GATE",
+    SignalWeight.HIGH: "HIGH",
+    SignalWeight.MEDIUM: "MED",
+    SignalWeight.LOW: "LOW",
+}
+
+
+def print_assessment(
+    assessment: Assessment,
+    signal_names: list[str],
+    signal_weights: list[SignalWeight],
+    verbose: bool = False,
+) -> None:
+    """Print a formatted assessment to the terminal."""
+    color = _TIER_COLORS[assessment.overall_tier]
+
+    # Header
+    _console.print()
+    _console.print(f"  Repository: [bold]{assessment.owner}/{assessment.repo}[/bold]")
+
+    tier_label = _TIER_LABELS[assessment.overall_tier]
+    _console.print(f"  Overall:    [{color} bold]{tier_label}[/{color} bold]")
+
+    if assessment.incomplete:
+        _console.print("  [yellow]Note: Incomplete assessment — some signals failed to evaluate[/yellow]")
+
+    _console.print()
+
+    # Natural-language summary
+    summary = _build_summary(assessment, signal_names)
+    _console.print(f"  {summary}")
+    _console.print()
+
+    # Signal table
+    table = Table(show_header=True, header_style="bold", padding=(0, 1))
+    table.add_column("Signal", min_width=25)
+    table.add_column("Weight", justify="center", min_width=6)
+    table.add_column("Tier", justify="center", min_width=8)
+    table.add_column("Finding", min_width=40)
+
+    for name, weight, result in zip(signal_names, signal_weights, assessment.signals):
+        tier_color = _TIER_COLORS.get(result.tier, "white")
+        weight_label = _WEIGHT_LABELS.get(weight, str(weight.value))
+
+        tier_display = result.tier.value.upper()
+        if weight == SignalWeight.GATE:
+            tier_display = "PASS" if result.score >= 0 else "FAIL"
+
+        finding = result.summary
+        if result.low_sample:
+            finding += " [dim](low sample)[/dim]"
+
+        table.add_row(
+            name,
+            weight_label,
+            f"[{tier_color}]{tier_display}[/{tier_color}]",
+            finding,
+        )
+
+    _console.print(table)
+    _console.print()
+
+    # Verbose details
+    if verbose:
+        _print_verbose_details(assessment, signal_names)
+
+
+def print_assessment_json(assessment: Assessment, signal_names: list[str]) -> None:
+    """Print assessment as JSON to stdout."""
+    data = {
+        "owner": assessment.owner,
+        "repo": assessment.repo,
+        "overall_tier": assessment.overall_tier.value,
+        "gate_passed": assessment.gate_passed,
+        "incomplete": assessment.incomplete,
+        "timestamp": assessment.timestamp,
+        "signals": [
+            {
+                "name": name,
+                "score": r.score,
+                "tier": r.tier.value,
+                "summary": r.summary,
+                "low_sample": r.low_sample,
+                "details": r.details,
+            }
+            for name, r in zip(signal_names, assessment.signals)
+        ],
+    }
+    print(json.dumps(data, indent=2))
+
+
+def print_cached_notice(owner: str, repo: str, timestamp: str) -> None:
+    """Print a notice that cached results are being used."""
+    _console.print(f"  [dim]Using cached assessment from {timestamp}. Use --no-cache to refresh.[/dim]")
+
+
+def _build_summary(assessment: Assessment, signal_names: list[str]) -> str:
+    """Build a natural-language summary paragraph from signal results."""
+    parts = []
+
+    for name, result in zip(signal_names, assessment.signals):
+        # Only include interesting findings in the summary
+        if "merge" in name.lower() and result.score >= 0:
+            parts.append(result.summary)
+        elif "response" in name.lower() and result.tier != Tier.RED:
+            parts.append(f"{result.summary} median response time")
+        elif "ghost" in name.lower() and result.score < 1.0:
+            parts.append(result.summary)
+        elif "ai policy" in name.lower() and result.score < 1.0:
+            parts.append(f"AI policy: {result.summary.lower()}")
+
+    if not parts:
+        if assessment.overall_tier == Tier.GREEN:
+            return "This project shows strong signals for accepting outside contributions."
+        elif assessment.overall_tier == Tier.YELLOW:
+            return "This project shows mixed signals for outside contributions."
+        else:
+            return "This project does not appear to accept outside contributions."
+
+    return ". ".join(parts) + "."
+
+
+def _print_verbose_details(assessment: Assessment, signal_names: list[str]) -> None:
+    """Print detailed signal data for --verbose mode."""
+    _console.print("  [bold]Detailed signal data:[/bold]")
+    for name, result in zip(signal_names, assessment.signals):
+        if result.details:
+            _console.print(f"    [dim]{name}:[/dim]")
+            for key, value in result.details.items():
+                _console.print(f"      {key}: {value}")
+
+        # Collaborator bias warning
+        collaborator_count = result.details.get("collaborator_pr_count", 0)
+        if collaborator_count > 0 and "merge" in name.lower():
+            _console.print(
+                f"      [yellow]Note: {collaborator_count} PR(s) from current collaborators "
+                f"may have been external contributions. authorAssociation reflects "
+                f"current role, not role at PR time.[/yellow]"
+            )
+    _console.print()
