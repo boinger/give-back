@@ -1,0 +1,11 @@
+{
+  "repository": {
+    "licenseInfo": null,
+    "labels": {"nodes": []},
+    "defaultBranchRef": null,
+    "releases": {"nodes": []},
+    "issues": {"totalCount": 0},
+    "closedIssues": {"totalCount": 0},
+    "pullRequests": {"nodes": []}
+  }
+}

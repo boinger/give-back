@@ -1,0 +1,266 @@
+{
+  "repository": {
+    "licenseInfo": {
+      "spdxId": "MIT",
+      "name": "MIT License",
+      "key": "mit"
+    },
+    "labels": {
+      "nodes": [
+        {"name": "bug"},
+        {"name": "good first issue"},
+        {"name": "help wanted"}
+      ]
+    },
+    "defaultBranchRef": {
+      "target": {
+        "committedDate": "2026-03-20T10:00:00Z"
+      }
+    },
+    "releases": {
+      "nodes": [
+        {"createdAt": "2026-01-15T12:00:00Z", "tagName": "v1.2.0"},
+        {"createdAt": "2026-02-20T12:00:00Z", "tagName": "v1.3.0"},
+        {"createdAt": "2026-03-10T12:00:00Z", "tagName": "v1.4.0"}
+      ]
+    },
+    "issues": {"totalCount": 42},
+    "closedIssues": {"totalCount": 380},
+    "pullRequests": {
+      "nodes": [
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-15T14:00:00Z",
+          "closedAt": "2026-03-15T14:00:00Z",
+          "createdAt": "2026-03-14T10:00:00Z",
+          "author": {"login": "external-dev-1"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-14T12:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {
+            "nodes": [
+              {"createdAt": "2026-03-14T16:00:00Z"}
+            ]
+          }
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-12T09:00:00Z",
+          "closedAt": "2026-03-12T09:00:00Z",
+          "createdAt": "2026-03-11T08:00:00Z",
+          "author": {"login": "external-dev-2"},
+          "authorAssociation": "FIRST_TIME_CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-11T10:00:00Z",
+                "author": {"login": "maintainer-2"},
+                "authorAssociation": "OWNER"
+              }
+            ]
+          },
+          "reviews": {
+            "nodes": [
+              {"createdAt": "2026-03-11T14:00:00Z"}
+            ]
+          }
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-10T12:00:00Z",
+          "closedAt": "2026-03-10T12:00:00Z",
+          "createdAt": "2026-03-09T09:00:00Z",
+          "author": {"login": "external-dev-3"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-09T11:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {
+            "nodes": [
+              {"createdAt": "2026-03-09T15:00:00Z"}
+            ]
+          }
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-08T14:00:00Z",
+          "closedAt": "2026-03-08T14:00:00Z",
+          "createdAt": "2026-03-07T10:00:00Z",
+          "author": {"login": "external-dev-1"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-07T14:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-05T11:00:00Z",
+          "closedAt": "2026-03-05T11:00:00Z",
+          "createdAt": "2026-03-04T09:00:00Z",
+          "author": {"login": "external-dev-4"},
+          "authorAssociation": "NONE",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-04T12:00:00Z",
+                "author": {"login": "maintainer-2"},
+                "authorAssociation": "OWNER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-03-03T10:00:00Z",
+          "closedAt": "2026-03-03T10:00:00Z",
+          "createdAt": "2026-03-02T08:00:00Z",
+          "author": {"login": "external-dev-5"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-03-02T10:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-02-28T15:00:00Z",
+          "closedAt": "2026-02-28T15:00:00Z",
+          "createdAt": "2026-02-27T10:00:00Z",
+          "author": {"login": "external-dev-6"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-02-27T13:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-02-25T12:00:00Z",
+          "closedAt": "2026-02-25T12:00:00Z",
+          "createdAt": "2026-02-24T09:00:00Z",
+          "author": {"login": "external-dev-7"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-02-24T11:00:00Z",
+                "author": {"login": "maintainer-2"},
+                "authorAssociation": "OWNER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-02-20T10:00:00Z",
+          "closedAt": "2026-02-20T10:00:00Z",
+          "createdAt": "2026-02-19T08:00:00Z",
+          "author": {"login": "external-dev-8"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-02-19T10:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "CLOSED",
+          "merged": false,
+          "mergedAt": null,
+          "closedAt": "2026-02-18T14:00:00Z",
+          "createdAt": "2026-02-17T10:00:00Z",
+          "author": {"login": "external-dev-9"},
+          "authorAssociation": "CONTRIBUTOR",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-02-17T12:00:00Z",
+                "author": {"login": "maintainer-1"},
+                "authorAssociation": "MEMBER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "CLOSED",
+          "merged": false,
+          "mergedAt": null,
+          "closedAt": "2026-02-15T11:00:00Z",
+          "createdAt": "2026-02-14T09:00:00Z",
+          "author": {"login": "external-dev-10"},
+          "authorAssociation": "NONE",
+          "comments": {
+            "nodes": [
+              {
+                "createdAt": "2026-02-14T14:00:00Z",
+                "author": {"login": "maintainer-2"},
+                "authorAssociation": "OWNER"
+              }
+            ]
+          },
+          "reviews": {"nodes": []}
+        },
+        {
+          "state": "MERGED",
+          "merged": true,
+          "mergedAt": "2026-02-10T09:00:00Z",
+          "closedAt": "2026-02-10T09:00:00Z",
+          "createdAt": "2026-02-09T10:00:00Z",
+          "author": {"login": "maintainer-1"},
+          "authorAssociation": "MEMBER",
+          "comments": {"nodes": []},
+          "reviews": {"nodes": []}
+        }
+      ]
+    }
+  }
+}

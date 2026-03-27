@@ -1,0 +1,97 @@
+"""Tests for contributing signals (existence + content)."""
+
+from give_back.models import RepoData, Tier
+from give_back.signals.contributing import (
+    evaluate_contributing_content,
+    evaluate_contributing_exists,
+)
+
+
+def _make_repo_data(
+    community: dict | None = None,
+    contributing_text: str | None = None,
+) -> RepoData:
+    return RepoData(
+        owner="test",
+        repo="repo",
+        graphql={"repository": {}},
+        community=community or {},
+        contributing_text=contributing_text,
+        search={},
+    )
+
+
+class TestContributingExists:
+    def test_present(self):
+        data = _make_repo_data(community={"contributing": {"url": "https://example.com"}})
+        result = evaluate_contributing_exists(data)
+        assert result.score == 1.0
+        assert result.tier == Tier.GREEN
+
+    def test_absent(self):
+        data = _make_repo_data(community={"contributing": None})
+        result = evaluate_contributing_exists(data)
+        assert result.score == 0.0
+        assert result.tier == Tier.RED
+
+    def test_missing_key(self):
+        data = _make_repo_data(community={})
+        result = evaluate_contributing_exists(data)
+        assert result.score == 0.0
+
+
+class TestContributingContent:
+    def test_cla_detected(self):
+        data = _make_repo_data(contributing_text="Please sign the CLA before submitting.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.3
+        assert "CLA" in result.summary
+
+    def test_contributor_license_agreement(self):
+        data = _make_repo_data(contributing_text="You must accept the Contributor License Agreement.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.3
+
+    def test_dco_detected(self):
+        data = _make_repo_data(contributing_text="All commits must include a Signed-off-by line.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.6
+        assert "DCO" in result.summary
+
+    def test_developer_certificate(self):
+        data = _make_repo_data(contributing_text="By contributing, you agree to the Developer Certificate of Origin.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.6
+
+    def test_onerous_process(self):
+        data = _make_repo_data(contributing_text="Changes must be approved by the committee.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.3
+        assert "onerous" in result.summary
+
+    def test_clean_contributing(self):
+        data = _make_repo_data(contributing_text="Fork the repo, make changes, open a PR. That's it!")
+        result = evaluate_contributing_content(data)
+        assert result.score == 1.0
+        assert result.tier == Tier.GREEN
+        assert "No friction" in result.summary
+
+    def test_no_text(self):
+        data = _make_repo_data(contributing_text=None)
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.5
+        assert result.tier == Tier.YELLOW
+        assert "no content to analyze" in result.summary
+
+    def test_multiple_indicators_uses_lowest(self):
+        """CLA (0.3) + DCO (0.6) → should use 0.3."""
+        data = _make_repo_data(contributing_text="Sign the CLA. All commits must have Signed-off-by.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.3
+        assert "CLA" in result.summary
+        assert "DCO" in result.summary
+
+    def test_case_insensitive(self):
+        data = _make_repo_data(contributing_text="you must sign the cla before contributing")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.3
