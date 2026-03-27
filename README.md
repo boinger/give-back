@@ -58,6 +58,12 @@ give-back triage pallets/flask
 # Filter by label
 give-back triage pallets/flask --label "good first issue"
 
+# Scan contribution conventions (Phase 3 — clones the repo)
+give-back conventions pallets/flask
+
+# Include issue context in the brief
+give-back conventions pallets/flask --issue 5432
+
 # Inspect code quality for a specific issue
 give-back sniff pallets/flask 5432
 ```
