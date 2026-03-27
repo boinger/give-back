@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import re
 import sys
-from datetime import datetime, timezone
 
 import click
 from rich.console import Console
@@ -22,11 +21,10 @@ from give_back.exceptions import (
 )
 from give_back.github_client import GitHubClient
 from give_back.graphql.queries import VIABILITY_QUERY
-from give_back.models import Assessment, RepoData, SignalWeight, Tier
+from give_back.models import RepoData
 from give_back.output import print_assessment, print_assessment_json, print_cached_notice, print_sniff, print_sniff_json
-from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
-from give_back.state import get_cached_assessment, save_assessment
+from give_back.state import add_to_skip_list, get_cached_assessment, remove_from_skip_list, save_assessment
 
 _console = Console(stderr=True)
 
@@ -153,11 +151,15 @@ def cli() -> None:
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON instead of formatted table.")
 @click.option("--no-cache", is_flag=True, help="Skip cached results, force fresh API calls.")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed signal data and API call info.")
-def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool) -> None:
+@click.option("--deps", is_flag=True, help="Also assess the project's dependencies for contribution opportunities.")
+@click.option("--limit", default=20, help="Maximum number of dependencies to assess (with --deps).")
+def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bool, limit: int) -> None:
     """Assess a GitHub repository's viability for outside contributions.
 
     REPO can be 'owner/repo' or a full GitHub URL.
     """
+    from give_back.assess import run_assessment
+
     # Parse repo argument
     try:
         owner, repo_name = _parse_repo(repo)
@@ -179,10 +181,55 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool) -> None:
     # Resolve auth
     token = resolve_token()
 
-    # Fetch data
+    # Fetch data and run assessment
     try:
         with GitHubClient(token=token) as client:
-            data = _fetch_repo_data(client, owner, repo_name, verbose)
+            assessment = run_assessment(client, owner, repo_name, verbose)
+
+            # Save to state
+            try:
+                save_assessment(assessment)
+            except PermissionError:
+                _console.print("[yellow]Warning:[/yellow] Cannot write state file. Continuing without cache.")
+            except StateCorruptError:
+                _console.print("[yellow]Warning:[/yellow] State file corrupted. Backed up and starting fresh.")
+                from give_back.state import _empty_state, save_state
+
+                try:
+                    save_state(_empty_state())
+                    save_assessment(assessment)
+                except PermissionError:
+                    pass
+
+            # Output
+            signal_names = [s.name for s in ALL_SIGNALS]
+            signal_weights = [s.weight for s in ALL_SIGNALS]
+
+            if json_output:
+                print_assessment_json(assessment, signal_names)
+            else:
+                print_assessment(assessment, signal_names, signal_weights, verbose=verbose)
+
+            # --deps: also walk dependencies
+            if deps:
+                if not client.authenticated:
+                    _console.print(
+                        "\n[red]Error:[/red] --deps requires authentication. Set GITHUB_TOKEN or run `gh auth login`."
+                    )
+                    sys.exit(1)
+
+                from give_back.deps.walker import walk_deps
+                from give_back.output import print_deps, print_deps_json
+
+                try:
+                    walk_result = walk_deps(client, owner, repo_name, limit=limit, verbose=verbose)
+                    if json_output:
+                        print_deps_json(walk_result)
+                    else:
+                        print_deps(walk_result, verbose=verbose)
+                except GiveBackError as exc:
+                    _console.print(f"\n[yellow]Warning:[/yellow] Dependency walking failed: {exc}")
+
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -196,65 +243,10 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool) -> None:
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
-    # Evaluate signals
-    signal_results: list[tuple[SignalWeight, object]] = []
-    successful_results = []
-
-    for signal_def in ALL_SIGNALS:
-        try:
-            result = signal_def.func(data)
-            signal_results.append((signal_def.weight, result))
-            successful_results.append(result)
-        except Exception:
-            signal_results.append((signal_def.weight, None))
-            # Create a placeholder result for display
-            from give_back.models import SignalResult
-
-            successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))
-
-    # Score
-    tier, gate_passed, incomplete = compute_tier(signal_results)
-
-    # Build assessment
-    now = datetime.now(timezone.utc).isoformat()
-    assessment = Assessment(
-        owner=owner,
-        repo=repo_name,
-        overall_tier=tier,
-        signals=successful_results,
-        gate_passed=gate_passed,
-        incomplete=incomplete,
-        timestamp=now,
-    )
-
-    # Save to state
-    try:
-        save_assessment(assessment)
-    except PermissionError:
-        _console.print("[yellow]Warning:[/yellow] Cannot write state file. Continuing without cache.")
-    except StateCorruptError:
-        _console.print("[yellow]Warning:[/yellow] State file corrupted. Backed up and starting fresh.")
-        from give_back.state import _empty_state, save_state
-
-        try:
-            save_state(_empty_state())
-            save_assessment(assessment)
-        except PermissionError:
-            pass
-
-    # Output
-    signal_names = [s.name for s in ALL_SIGNALS]
-    signal_weights = [s.weight for s in ALL_SIGNALS]
-
-    if json_output:
-        print_assessment_json(assessment, signal_names)
-    else:
-        print_assessment(assessment, signal_names, signal_weights, verbose=verbose)
-
     # Exit codes: 0 = success, 1 = gate fail, 2 = incomplete (HIGH/GATE signal errored)
-    if not gate_passed:
+    if not assessment.gate_passed:
         sys.exit(1)
-    if incomplete:
+    if assessment.incomplete:
         sys.exit(2)
 
 
@@ -355,3 +347,87 @@ def sniff(repo: str, issue_number: int, json_output: bool) -> None:
         print_sniff_json(result)
     else:
         print_sniff(result)
+
+
+@cli.command()
+@click.argument("repo")
+@click.option("--limit", default=20, help="Maximum number of dependencies to assess.")
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON instead of formatted table.")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed progress and signal data.")
+def deps(repo: str, limit: int, json_output: bool, verbose: bool) -> None:
+    """Walk a project's dependencies and assess each for contribution viability.
+
+    REPO can be 'owner/repo' or a full GitHub URL.
+    Parses the project's manifest (go.mod, pyproject.toml, requirements.txt),
+    resolves each dependency to a GitHub repo, and runs viability assessment.
+    """
+    from give_back.deps.walker import walk_deps
+    from give_back.output import print_deps, print_deps_json
+
+    try:
+        owner, repo_name = _parse_repo(repo)
+    except click.BadParameter as exc:
+        _console.print(f"[red]Error:[/red] {exc.format_message()}")
+        sys.exit(1)
+
+    token = resolve_token()
+    if token is None:
+        _console.print("[red]Error:[/red] `deps` requires authentication. Set GITHUB_TOKEN or run `gh auth login`.")
+        sys.exit(1)
+
+    try:
+        with GitHubClient(token=token) as client:
+            walk_result = walk_deps(client, owner, repo_name, limit=limit, verbose=verbose)
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RepoNotFoundError:
+        _console.print(f"[red]Error:[/red] Repository not found: {owner}/{repo_name}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except GiveBackError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    if json_output:
+        print_deps_json(walk_result)
+    else:
+        print_deps(walk_result, verbose=verbose)
+
+
+@cli.command()
+@click.argument("repo")
+def skip(repo: str) -> None:
+    """Add a repository to the skip list (excluded from dep-walking results).
+
+    REPO should be 'owner/repo'.
+    """
+    try:
+        owner, repo_name = _parse_repo(repo)
+    except click.BadParameter as exc:
+        _console.print(f"[red]Error:[/red] {exc.format_message()}")
+        sys.exit(1)
+
+    slug = f"{owner}/{repo_name}"
+    add_to_skip_list(slug)
+    _console.print(f"Added {slug} to skip list.")
+
+
+@cli.command()
+@click.argument("repo")
+def unskip(repo: str) -> None:
+    """Remove a repository from the skip list.
+
+    REPO should be 'owner/repo'.
+    """
+    try:
+        owner, repo_name = _parse_repo(repo)
+    except click.BadParameter as exc:
+        _console.print(f"[red]Error:[/red] {exc.format_message()}")
+        sys.exit(1)
+
+    slug = f"{owner}/{repo_name}"
+    remove_from_skip_list(slug)
+    _console.print(f"Removed {slug} from skip list.")
