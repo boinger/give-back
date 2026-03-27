@@ -398,6 +398,57 @@ def deps(repo: str, limit: int, json_output: bool, verbose: bool) -> None:
 
 
 @cli.command()
+@click.argument("calibration_file", type=click.Path(exists=True))
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed signal data for mismatches.")
+def calibrate(calibration_file: str, verbose: bool) -> None:
+    """Run scoring threshold calibration against a set of repos with known tiers.
+
+    CALIBRATION_FILE is a YAML or JSON file mapping repos to expected tiers.
+
+    YAML format:
+
+        - repo: pallets/flask
+
+          expected: green
+
+    JSON format:
+
+        [{"repo": "pallets/flask", "expected": "green"}]
+    """
+    from give_back.calibrate import load_calibration_file, run_calibration
+    from give_back.output import print_calibration
+
+    try:
+        entries = load_calibration_file(calibration_file)
+    except (ValueError, KeyError) as exc:
+        _console.print(f"[red]Error:[/red] Invalid calibration file: {exc}")
+        sys.exit(1)
+
+    if not entries:
+        _console.print("[red]Error:[/red] Calibration file contains no entries.")
+        sys.exit(1)
+
+    token = resolve_token()
+
+    try:
+        with GitHubClient(token=token) as client:
+            _console.print(f"  Running calibration on {len(entries)} repos...")
+            result = run_calibration(client, entries, verbose=verbose)
+
+        print_calibration(result, verbose=verbose)
+
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RepoNotFoundError as exc:
+        _console.print(f"[red]Error:[/red] Repository not found: {exc}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+
+@cli.command()
 @click.argument("repo")
 def skip(repo: str) -> None:
     """Add a repository to the skip list (excluded from dep-walking results).
