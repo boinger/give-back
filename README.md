@@ -64,6 +64,13 @@ give-back conventions pallets/flask
 # Include issue context in the brief
 give-back conventions pallets/flask --issue 5432
 
+# Prepare a contribution workspace (Phase 4 — forks and clones)
+give-back prepare pallets/flask --issue 5432
+
+# Run pre-flight checks in your workspace
+cd ~/give-back-workspaces/pallets/flask
+give-back check
+
 # Inspect code quality for a specific issue
 give-back sniff pallets/flask 5432
 ```

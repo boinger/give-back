@@ -62,6 +62,8 @@ make run ARGS='triage pallets/flask'      # find starter issues
 make run ARGS='sniff pallets/flask 123'   # inspect issue code quality
 make run ARGS='conventions pallets/flask'  # scan contribution conventions
 make run ARGS='conventions pallets/flask --issue 5432'  # with issue context
+make run ARGS='prepare pallets/flask --issue 5432'  # fork + clone + branch + brief
+make run ARGS='check'                     # run pre-flight guardrails in workspace
 make run ARGS='skip google/protobuf'      # add to skip list
 make run ARGS='unskip google/protobuf'    # remove from skip list
 ```

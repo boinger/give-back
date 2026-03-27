@@ -28,8 +28,9 @@ falls back to manual review link when no API key is available.
 
 - ~~**Phase 3: Convention Scan**~~ DONE — `give-back conventions` clones, analyzes
   commit format, merge strategy, PR templates, branch naming, DCO, tests, style.
-- **Phase 4: Fork/Fix/PR** — fork, create branch, hand off to Claude Code with the
-  contribution brief, write fix, run tests, populate PR description.
+- ~~**Phase 4: Prepare Workspace**~~ DONE — `give-back prepare` forks, clones, branches,
+  writes brief + context.json, runs configurable handoff. `give-back check` runs
+  pre-flight guardrails in the workspace.
 - **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
 - **Go module proxy resolution** — resolve gopkg.in, k8s.io and other non-GitHub Go hosts.
 - **PR pagination** — paginate to fill the 12-month window for prolific repos.
