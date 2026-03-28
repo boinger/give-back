@@ -46,4 +46,6 @@ falls back to manual review link when no API key is available.
   (npm registry), Gemfile (RubyGems) parsing and resolution. Resolvers hit
   crates.io, registry.npmjs.org, rubygems.org APIs for GitHub URL extraction.
   Node.js builtins filtered. Walker detects all six manifest types.
-- **PR pagination** — paginate to fill the 12-month window for prolific repos.
+- ~~**PR pagination**~~ DONE — cursor-based GraphQL pagination for PRs, 50 per
+  page, stops at the 12-month boundary or 500 PRs max. Metadata query separated
+  from PR query to enable independent pagination.

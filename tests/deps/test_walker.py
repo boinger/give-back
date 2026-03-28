@@ -46,8 +46,8 @@ require (
 )
 """
 
-# Minimal healthy repo GraphQL response for viability assessment
-_GRAPHQL_RESPONSE = {
+# Minimal healthy repo GraphQL response — metadata only (no PRs)
+_GRAPHQL_METADATA_RESPONSE = {
     "data": {
         "repository": {
             "licenseInfo": {"spdxId": "MIT", "name": "MIT License", "key": "mit"},
@@ -60,7 +60,16 @@ _GRAPHQL_RESPONSE = {
             },
             "issues": {"totalCount": 10},
             "closedIssues": {"totalCount": 50},
+        }
+    }
+}
+
+# PR page response (returned by the paginated PR query)
+_GRAPHQL_PR_PAGE_RESPONSE = {
+    "data": {
+        "repository": {
             "pullRequests": {
+                "pageInfo": {"hasPreviousPage": False, "startCursor": None},
                 "nodes": [
                     {
                         "number": 1,
@@ -78,8 +87,9 @@ _GRAPHQL_RESPONSE = {
                                 }
                             ]
                         },
+                        "reviews": {"nodes": []},
                     }
-                ]
+                ],
             },
         }
     }
@@ -116,7 +126,7 @@ def _mock_github_assessment(router: respx.MockRouter, owner: str, repo: str) -> 
     """Set up respx routes for a full viability assessment of a repo."""
     # GraphQL
     router.post("https://api.github.com/graphql").mock(
-        return_value=httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        return_value=httpx.Response(200, json=_GRAPHQL_METADATA_RESPONSE, headers=_RATE_LIMIT_HEADERS)
     )
 
     # Community profile
@@ -170,14 +180,11 @@ class TestWalkPythonProject:
                 )
             )
 
-        # 5. Assessment API calls (GraphQL + community + search) for each dep
-        # Since respx matches routes greedily, the graphql + community + search
-        # routes must handle multiple calls. We use side_effect lists.
-        graphql_responses = [
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-        ]
-        respx.post("https://api.github.com/graphql").mock(side_effect=graphql_responses)
+        # 5. Assessment API calls for each dep: metadata + PR page per dep
+        # Each assessment = 2 GraphQL calls (metadata + PR page), so 2 deps = 4 calls
+        _meta = httpx.Response(200, json=_GRAPHQL_METADATA_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        _prs = httpx.Response(200, json=_GRAPHQL_PR_PAGE_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        respx.post("https://api.github.com/graphql").mock(side_effect=[_meta, _prs, _meta, _prs])
 
         for slug in ("pallets/click", "encode/httpx"):
             respx.get(f"https://api.github.com/repos/{slug}/community/profile").mock(
@@ -231,12 +238,10 @@ class TestWalkGoProject:
                 )
             )
 
-        # 3. Assessment for each dep
-        graphql_responses = [
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-        ]
-        respx.post("https://api.github.com/graphql").mock(side_effect=graphql_responses)
+        # 3. Assessment for each dep (metadata + PR page per dep)
+        _meta = httpx.Response(200, json=_GRAPHQL_METADATA_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        _prs = httpx.Response(200, json=_GRAPHQL_PR_PAGE_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        respx.post("https://api.github.com/graphql").mock(side_effect=[_meta, _prs, _meta, _prs])
 
         for slug in ("gorilla/mux", "sirupsen/logrus"):
             respx.get(f"https://api.github.com/repos/{slug}/community/profile").mock(
@@ -315,12 +320,10 @@ dependencies = [
                 )
             )
 
-        # Assessment — only 2 will be assessed (limit=2)
-        graphql_responses = [
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-            httpx.Response(200, json=_GRAPHQL_RESPONSE, headers=_RATE_LIMIT_HEADERS),
-        ]
-        respx.post("https://api.github.com/graphql").mock(side_effect=graphql_responses)
+        # Assessment — only 2 will be assessed (limit=2), each needs metadata + PR page
+        _meta = httpx.Response(200, json=_GRAPHQL_METADATA_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        _prs = httpx.Response(200, json=_GRAPHQL_PR_PAGE_RESPONSE, headers=_RATE_LIMIT_HEADERS)
+        respx.post("https://api.github.com/graphql").mock(side_effect=[_meta, _prs, _meta, _prs])
 
         for name in ("pkg-a", "pkg-b"):
             respx.get(f"https://api.github.com/repos/ext-{name}/repo/community/profile").mock(

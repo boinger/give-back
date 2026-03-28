@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import base64
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from rich.console import Console
 
 from give_back.exceptions import GiveBackError, RateLimitError, RepoNotFoundError
 from give_back.github_client import GitHubClient
-from give_back.graphql.queries import VIABILITY_QUERY
+from give_back.graphql.queries import PULL_REQUESTS_PAGE_QUERY, VIABILITY_QUERY
 from give_back.license_eval import LicenseEvaluation, evaluate_license_text
 from give_back.models import Assessment, RepoData, SignalResult, Tier
 from give_back.reconcile import reconcile_merge_rate, should_reconcile
@@ -25,6 +25,67 @@ _console = Console(stderr=True)
 
 # License file names to try, in order of preference
 _LICENSE_FILENAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
+
+# PR pagination: stop after this many pages to bound API usage
+_MAX_PR_PAGES = 10  # 10 pages × 50 PRs = 500 PRs max
+_MONTHS_WINDOW = 12
+
+
+def _fetch_prs_paginated(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    verbose: bool,
+) -> list[dict]:
+    """Fetch PRs with cursor-based pagination, stopping at the 12-month boundary.
+
+    Uses ``last: 50`` (newest first) and pages backwards in time via ``before`` cursor.
+    Stops when: all PRs on a page are older than the signal window, or max pages reached.
+    """
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_MONTHS_WINDOW * 30)
+    all_prs: list[dict] = []
+    cursor: str | None = None
+
+    for page in range(_MAX_PR_PAGES):
+        variables: dict = {"owner": owner, "repo": repo}
+        if cursor:
+            variables["cursor"] = cursor
+
+        try:
+            data = client.graphql(PULL_REQUESTS_PAGE_QUERY, variables)
+        except GiveBackError:
+            break  # API error — return what we have
+
+        pr_data = (data.get("repository") or {}).get("pullRequests") or {}
+        nodes = pr_data.get("nodes") or []
+        page_info = pr_data.get("pageInfo") or {}
+
+        if not nodes:
+            break
+
+        all_prs.extend(nodes)
+
+        # Check if the oldest PR on this page is beyond our window
+        oldest_pr = nodes[0]  # last:50 returns oldest-first within the page
+        oldest_date_str = oldest_pr.get("createdAt") or oldest_pr.get("closedAt") or ""
+        if oldest_date_str:
+            try:
+                oldest_date = datetime.fromisoformat(oldest_date_str.replace("Z", "+00:00"))
+                if oldest_date < cutoff:
+                    if verbose:
+                        _console.print(f"  [dim]Reached 12-month boundary at page {page + 1}[/dim]")
+                    break
+            except ValueError:
+                pass
+
+        # Check if there are more pages
+        if not page_info.get("hasPreviousPage"):
+            break
+        cursor = page_info.get("startCursor")
+        if not cursor:
+            break
+
+    return all_prs
 
 
 def _needs_ai_search(contributing_text: str | None) -> bool:
@@ -53,16 +114,27 @@ def _needs_ai_search(contributing_text: str | None) -> bool:
 
 
 def _fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool) -> RepoData:
-    """Fetch all data needed for signal evaluation (4 API calls)."""
+    """Fetch all data needed for signal evaluation.
+
+    Makes 1 GraphQL call for repo metadata, then paginates PRs (50 per page)
+    until we have enough history to cover the 12-month signal window.
+    """
     if verbose:
         _console.print(f"  [dim]Fetching GraphQL data for {owner}/{repo}...[/dim]")
 
-    # 1. GraphQL: repo metadata + PRs
+    # 1. GraphQL: repo metadata (no PRs — those are paginated separately)
     graphql_data = client.graphql(VIABILITY_QUERY, {"owner": owner, "repo": repo})
+
+    # 2. Paginate PRs until we have 12 months of history
+    if verbose:
+        _console.print("  [dim]Fetching pull requests...[/dim]")
+
+    all_prs = _fetch_prs_paginated(client, owner, repo, verbose)
+    graphql_data.setdefault("repository", {})["pullRequests"] = {"nodes": all_prs}
 
     if verbose:
         remaining = client._rate_remaining
-        _console.print(f"  [dim]Rate limit remaining: {remaining}[/dim]")
+        _console.print(f"  [dim]Rate limit remaining: {remaining} ({len(all_prs)} PRs fetched)[/dim]")
 
     # 2. REST: community profile
     if verbose:

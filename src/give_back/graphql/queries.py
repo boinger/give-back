@@ -1,10 +1,9 @@
 """GraphQL query strings for give-back.
 
-The main viability query fetches most data needed for Phase 1 signals in a single
-API call. CONTRIBUTING.md text is fetched separately via REST (see CLAUDE.md).
-
-Note: GitHub GraphQL orders PRs by CREATED_AT, not CLOSED_AT. Signal functions
-apply the 12-month date filter on closedAt/mergedAt timestamps.
+The main viability query fetches repo metadata in a single API call.
+PRs are fetched separately via PULL_REQUESTS_PAGE_QUERY with cursor-based
+pagination (50 per page, stops when PRs are older than the signal window).
+CONTRIBUTING.md text is fetched separately via REST (see CLAUDE.md).
 """
 
 VIABILITY_QUERY = """
@@ -39,7 +38,18 @@ query RepoViability($owner: String!, $repo: String!) {
     closedIssues: issues(states: CLOSED) {
       totalCount
     }
-    pullRequests(last: 50, states: [MERGED, CLOSED]) {
+  }
+}
+"""
+
+PULL_REQUESTS_PAGE_QUERY = """
+query PullRequestsPage($owner: String!, $repo: String!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequests(last: 50, states: [MERGED, CLOSED], before: $cursor) {
+      pageInfo {
+        hasPreviousPage
+        startCursor
+      }
       nodes {
         state
         merged

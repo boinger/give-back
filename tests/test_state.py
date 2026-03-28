@@ -25,9 +25,14 @@ from give_back.state import (
 
 @pytest.fixture
 def state_dir(tmp_path):
-    """Use a temp directory for state file."""
+    """Use a temp directory for state file and config."""
     state_file = tmp_path / "state.json"
-    with patch("give_back.state.STATE_DIR", tmp_path), patch("give_back.state.STATE_FILE", state_file):
+    config_file = tmp_path / "config.yaml"
+    with (
+        patch("give_back.state.STATE_DIR", tmp_path),
+        patch("give_back.state.STATE_FILE", state_file),
+        patch("give_back.state.CONFIG_FILE", config_file),
+    ):
         yield tmp_path, state_file
 
 
