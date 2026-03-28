@@ -44,7 +44,11 @@ def _make_pr(
 
     reviews = []
     if review_at:
-        reviews.append({"createdAt": review_at})
+        reviews.append({
+            "createdAt": review_at,
+            "author": {"login": "reviewer"},
+            "authorAssociation": "MEMBER",
+        })
 
     return {
         "state": "MERGED",
@@ -282,3 +286,114 @@ class TestTimeToResponse:
         result = evaluate_time_to_response(data)
         assert result.details["responded_prs"] == 3
         assert result.low_sample is True
+
+
+class TestBotFiltering:
+    """Bot comments and reviews should not count as maintainer responses."""
+
+    def _make_pr_with_bot_comment(self, bot_login, maintainer_comment_at=None):
+        """PR with a fast bot comment and optional slower human comment."""
+        comments = [
+            {
+                "createdAt": "2026-03-01T10:05:00Z",  # 5 min after PR
+                "author": {"login": bot_login},
+                "authorAssociation": "MEMBER",
+            },
+        ]
+        if maintainer_comment_at:
+            comments.append(
+                {
+                    "createdAt": maintainer_comment_at,
+                    "author": {"login": "human-maintainer"},
+                    "authorAssociation": "MEMBER",
+                }
+            )
+        return {
+            "state": "MERGED",
+            "merged": True,
+            "mergedAt": "2026-03-05T10:00:00Z",
+            "closedAt": "2026-03-05T10:00:00Z",
+            "createdAt": "2026-03-01T10:00:00Z",
+            "author": {"login": "ext-dev"},
+            "authorAssociation": "CONTRIBUTOR",
+            "comments": {"nodes": comments},
+            "reviews": {"nodes": []},
+        }
+
+    def test_bot_suffix_filtered(self):
+        """Comments from accounts ending in [bot] are ignored."""
+        prs = [self._make_pr_with_bot_comment("CLAassistant[bot]") for _ in range(12)]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_time_to_response(data)
+        # Bot is the only commenter, so no human responses found
+        assert result.score == 0.1
+        assert "No maintainer responses" in result.summary
+
+    def test_known_bot_filtered(self):
+        """Comments from known bot logins are ignored."""
+        prs = [self._make_pr_with_bot_comment("dependabot") for _ in range(12)]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_time_to_response(data)
+        assert result.score == 0.1
+
+    def test_bot_ignored_human_counted(self):
+        """Bot comment at 5min ignored, human comment at 24h used instead."""
+        prs = [
+            self._make_pr_with_bot_comment(
+                "CLAassistant[bot]",
+                maintainer_comment_at="2026-03-02T10:00:00Z",
+            )
+            for _ in range(12)
+        ]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_time_to_response(data)
+        # Human responded at 24h, bot at 5min should be ignored
+        assert result.details["median_hours"] == 24.0
+        assert result.score == 1.0  # <=24h
+
+    def test_bot_review_filtered(self):
+        """Reviews from bot accounts are ignored."""
+        prs = []
+        for _ in range(12):
+            prs.append({
+                "state": "MERGED",
+                "merged": True,
+                "mergedAt": "2026-03-05T10:00:00Z",
+                "closedAt": "2026-03-05T10:00:00Z",
+                "createdAt": "2026-03-01T10:00:00Z",
+                "author": {"login": "ext-dev"},
+                "authorAssociation": "CONTRIBUTOR",
+                "comments": {"nodes": []},
+                "reviews": {"nodes": [{
+                    "createdAt": "2026-03-01T10:02:00Z",
+                    "author": {"login": "codecov[bot]"},
+                    "authorAssociation": "MEMBER",
+                }]},
+            })
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_time_to_response(data)
+        assert result.score == 0.1
+        assert "No maintainer responses" in result.summary
+
+    def test_non_internal_review_filtered(self):
+        """Reviews from non-internal authors are ignored."""
+        prs = []
+        for _ in range(12):
+            prs.append({
+                "state": "MERGED",
+                "merged": True,
+                "mergedAt": "2026-03-05T10:00:00Z",
+                "closedAt": "2026-03-05T10:00:00Z",
+                "createdAt": "2026-03-01T10:00:00Z",
+                "author": {"login": "ext-dev"},
+                "authorAssociation": "CONTRIBUTOR",
+                "comments": {"nodes": []},
+                "reviews": {"nodes": [{
+                    "createdAt": "2026-03-01T10:02:00Z",
+                    "author": {"login": "random-person"},
+                    "authorAssociation": "NONE",
+                }]},
+            })
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_time_to_response(data)
+        assert result.score == 0.1

@@ -31,6 +31,14 @@ falls back to manual review link when no API key is available.
 - ~~**Phase 4: Prepare Workspace**~~ DONE — `give-back prepare` forks, clones, branches,
   writes brief + context.json, runs configurable handoff. `give-back check` runs
   pre-flight guardrails in the workspace.
+- **CLA detection** — detect Contributor License Agreements in conventions scan.
+  Check for CLA bot configs (.github/workflows/cla*.yml, .clabot, cla.json),
+  known CLA services (CLA Assistant, EasyCLA) in recent PR comments/checks.
+  Surface in brief ("CLA required, sign before submitting") and warn in
+  `give-back check`. Prompted by grafana/alloy requiring CLA sign-off.
+- **Ghost-closing bot awareness** — currently a bot-only comment (e.g. CLA bot)
+  prevents a PR from being counted as ghost-closed. A PR closed with only bot
+  comments and no human follow-up is still effectively ghost-closed.
 - **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
 - **Go module proxy resolution** — resolve gopkg.in, k8s.io and other non-GitHub Go hosts.
 - **PR pagination** — paginate to fill the 12-month window for prolific repos.

@@ -62,6 +62,10 @@ query RepoViability($owner: String!, $repo: String!) {
         reviews(first: 1) {
           nodes {
             createdAt
+            author {
+              login
+            }
+            authorAssociation
           }
         }
       }

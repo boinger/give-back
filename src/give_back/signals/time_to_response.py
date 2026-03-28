@@ -26,6 +26,29 @@ INTERNAL_ASSOCIATIONS = {"MEMBER", "OWNER", "COLLABORATOR"}
 LOW_SAMPLE_THRESHOLD = 10
 MONTHS_WINDOW = 12
 
+# Bot account suffixes and known bot logins. Bots responding instantly
+# inflate response time scores and don't reflect maintainer engagement.
+_BOT_SUFFIXES = ("[bot]", "-bot")
+_KNOWN_BOTS = frozenset({
+    "dependabot",
+    "renovate",
+    "codecov",
+    "stale",
+    "CLAassistant",
+    "allcontributors",
+    "netlify",
+    "vercel",
+    "sonarcloud",
+    "codeclimate",
+    "snyk-bot",
+    "imgbot",
+    "greenkeeper",
+    "depfu",
+    "mergify",
+    "kodiakhq",
+    "gitguardian",
+})
+
 # Score thresholds (hours)
 THRESHOLDS = [
     (24, 1.0),
@@ -34,6 +57,16 @@ THRESHOLDS = [
     (720, 0.3),
 ]
 FALLBACK_SCORE = 0.1
+
+
+def _is_bot(login: str | None) -> bool:
+    """Return True if the login looks like a bot account."""
+    if not login:
+        return False
+    lower = login.lower()
+    if lower in _KNOWN_BOTS:
+        return True
+    return any(lower.endswith(suffix) for suffix in _BOT_SUFFIXES)
 
 
 def _hours_to_score(hours: float) -> float:
@@ -57,20 +90,30 @@ def _find_first_maintainer_response(pr: dict) -> datetime | None:
     """
     earliest: datetime | None = None
 
-    # Check comments for maintainer responses
+    # Check comments for maintainer responses (excluding bots)
     comments = (pr.get("comments") or {}).get("nodes") or []
     for comment in comments:
         association = comment.get("authorAssociation", "NONE")
-        if association in INTERNAL_ASSOCIATIONS:
-            created_at = comment.get("createdAt")
-            if created_at:
-                dt = _parse_dt(created_at)
-                if earliest is None or dt < earliest:
-                    earliest = dt
+        if association not in INTERNAL_ASSOCIATIONS:
+            continue
+        login = (comment.get("author") or {}).get("login")
+        if _is_bot(login):
+            continue
+        created_at = comment.get("createdAt")
+        if created_at:
+            dt = _parse_dt(created_at)
+            if earliest is None or dt < earliest:
+                earliest = dt
 
-    # Check reviews — a review counts as a response
+    # Check reviews — only from internal, non-bot authors
     reviews = (pr.get("reviews") or {}).get("nodes") or []
     for review in reviews:
+        association = review.get("authorAssociation", "NONE")
+        if association not in INTERNAL_ASSOCIATIONS:
+            continue
+        login = (review.get("author") or {}).get("login")
+        if _is_bot(login):
+            continue
         created_at = review.get("createdAt")
         if created_at:
             dt = _parse_dt(created_at)
