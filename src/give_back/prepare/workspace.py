@@ -12,6 +12,16 @@ from pathlib import Path
 from give_back.conventions.models import BranchConvention
 from give_back.exceptions import WorkspaceError
 
+_GITHUB_SLUG_RE = re.compile(
+    r"(?:git@github\.com:|https://github\.com/)([^/]+/[^/.]+?)(?:\.git)?$"
+)
+
+
+def _normalize_github_url(url: str) -> str | None:
+    """Extract 'owner/repo' from a GitHub URL (SSH or HTTPS). Returns None if not GitHub."""
+    match = _GITHUB_SLUG_RE.match(url.strip())
+    return match.group(1) if match else None
+
 
 def setup_workspace(
     fork_owner: str,
@@ -53,10 +63,12 @@ def setup_workspace(
             )
 
         actual_url = result.stdout.strip()
-        if actual_url != upstream_url:
+        actual_slug = _normalize_github_url(actual_url)
+        expected_slug = f"{upstream_owner}/{repo}"
+        if actual_slug != expected_slug:
             raise WorkspaceError(
                 f"Directory {clone_dir} has upstream remote pointing to {actual_url}, "
-                f"expected {upstream_url}. Move or remove it and re-run."
+                f"expected {expected_slug}. Move or remove it and re-run."
             )
 
         # Existing workspace — fetch upstream

@@ -260,7 +260,8 @@ def triage(repo: str, label: str | None, limit: int, json_output: bool, verbose:
 @click.argument("repo")
 @click.argument("issue_number", type=int)
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON instead of formatted table.")
-def sniff(repo: str, issue_number: int, json_output: bool) -> None:
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed file assessment data.")
+def sniff(repo: str, issue_number: int, json_output: bool, verbose: bool) -> None:
     """Assess code quality for files referenced in a GitHub issue.
 
     REPO can be 'owner/repo' or a full GitHub URL. ISSUE_NUMBER is the issue to inspect.
