@@ -165,7 +165,7 @@ class GitHubClient:
                 last_exception = exc
                 if exc.reset_at and attempt < _MAX_RETRIES:
                     wait = max(0, exc.reset_at - int(time.time())) + 1
-                    time.sleep(min(wait, 60))  # Cap wait at 60s
+                    time.sleep(min(wait, 120))  # Cap at 120s to guard against clock skew
                 else:
                     raise
 
