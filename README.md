@@ -18,6 +18,30 @@ Results are a Green/Yellow/Red viability tier with a signal breakdown.
 
 Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
+### Global install (recommended)
+
+Install as a standalone CLI tool available from any directory:
+
+```bash
+uv tool install --from git+https://github.com/boinger/give-back.git give-back
+```
+
+Or from a local checkout:
+
+```bash
+uv tool install --from ./give-back give-back
+```
+
+After changes to the source, reinstall to pick them up:
+
+```bash
+uv tool install --from ./give-back give-back --reinstall
+```
+
+### Development install
+
+For contributing to give-back itself:
+
 ```bash
 git clone https://github.com/boinger/give-back.git
 cd give-back
@@ -87,6 +111,26 @@ for a single assessment (4 API calls).
 - `0` — Assessment completed successfully
 - `1` — Fatal error (network failure, auth failure, repo not found)
 - `2` — Partial assessment (some signals failed, tier may be capped)
+
+## Claude Code Skill
+
+give-back includes a Claude Code skill for guided contribution workflows.
+Install the skill to get `/give-back` as a slash command:
+
+```bash
+mkdir -p ~/.claude/skills/give-back
+cp skills/SKILL.md ~/.claude/skills/give-back/SKILL.md
+```
+
+Or symlink for automatic updates:
+
+```bash
+mkdir -p ~/.claude/skills/give-back
+ln -sf "$(pwd)/skills/SKILL.md" ~/.claude/skills/give-back/SKILL.md
+```
+
+Then in Claude Code, use `/give-back grafana/alloy` to run the full guided
+workflow, or any natural language like "help me contribute to grafana/alloy".
 
 ## Development
 

@@ -1,0 +1,151 @@
+# give-back
+
+> Evaluate whether an open-source project is viable for outside contributions.
+
+give-back is a CLI tool that queries the GitHub API and scores repositories on
+contribution-friendliness. It produces a Green/Yellow/Red viability tier based
+on 9 weighted signals.
+
+## Quick start
+
+```bash
+# Install globally
+uv tool install --from git+https://github.com/boinger/give-back.git give-back
+
+# Assess a repo
+give-back assess pallets/flask
+
+# Find starter issues
+give-back triage pallets/flask
+
+# Scan contribution conventions (clones the repo)
+give-back conventions pallets/flask
+
+# Prepare a contribution workspace (forks, clones, branches, writes brief)
+give-back prepare pallets/flask --issue 5432
+
+# Run pre-flight checks before submitting a PR
+cd ~/give-back-workspaces/pallets/flask
+give-back check
+```
+
+## Authentication
+
+Set `GITHUB_TOKEN` or run `gh auth login`. Without authentication, GitHub
+limits requests to 60/hour, which is insufficient for a single assessment.
+
+## Commands
+
+### assess <repo>
+
+The viability gate. Runs 9 signals against the repo and produces a tier.
+
+- `--json` for machine-readable output
+- `--verbose` for detailed signal data
+- `--no-cache` to skip the 24-hour result cache
+- `--deps` to also walk the project's dependencies and assess each one
+
+Signals evaluated:
+1. License (GATE): must be OSS-compatible or assessment fails
+2. External PR merge rate (HIGH): what % of outside PRs get merged
+3. Ghost-closing rate (HIGH): PRs closed without any comment
+4. Time-to-first-response (MEDIUM): how fast maintainers respond
+5. CONTRIBUTING.md exists (LOW): presence of contribution guide
+6. Contribution process (MEDIUM): quality of the contribution guide
+7. AI policy (MEDIUM): stance on AI-generated contributions
+8. Issue label hygiene (LOW): "good first issue", "help wanted" labels
+9. Staleness (MEDIUM): recent commits, releases, issue resolution
+
+Exit codes: 0 = success, 1 = gate fail, 2 = incomplete (signal errors).
+
+### triage <repo>
+
+Find good starter issues. Fetches open issues, checks for competing PRs and
+claim comments, ranks by contribution-friendliness.
+
+- `--label "good first issue"` to filter by label
+- `--limit 20` to cap results
+
+### sniff <repo> <issue_number>
+
+Inspect code quality for files referenced in a specific issue. Extracts file
+paths from the issue body, fetches content, and runs heuristics (file size,
+test coverage, churn, nesting depth).
+
+### conventions <repo>
+
+Clone the repo and scan for contribution conventions: commit message format,
+merge strategy, PR templates, branch naming, DCO requirements, test framework,
+code style tooling.
+
+- `--issue 5432` to include issue context in the output brief
+- `--keep-clone` to preserve the cloned repo after scanning
+
+### prepare <repo>
+
+Full workspace setup for a contribution. Forks the repo, clones your fork,
+creates a branch from upstream default, scans conventions, writes a contribution
+brief with context.json, and optionally runs a handoff command (e.g. open your
+editor).
+
+- `--issue 5432` to prepare for a specific issue
+- `--skip-conventions` for faster setup without convention scan
+
+### check
+
+Run pre-flight guardrails in a workspace created by `prepare`. Checks for
+staged files that shouldn't be committed (.claude/, .give-back/), DCO sign-off
+compliance, unrelated changes, base branch freshness, and duplicate PRs.
+
+### deps <repo>
+
+Walk a project's dependencies and assess each for contribution viability.
+Supports go.mod, pyproject.toml, and requirements.txt.
+
+### skip / unskip <repo>
+
+Manage the skip list for dependency walking results.
+
+### calibrate <file>
+
+Run scoring threshold calibration against repos with known expected tiers.
+
+## Recommended workflow
+
+1. `give-back assess owner/repo` to check viability
+2. `give-back triage owner/repo` to find a good issue
+3. `give-back sniff owner/repo <issue>` to check code quality
+4. `give-back prepare owner/repo --issue <issue>` to set up workspace
+5. Do the work
+6. `give-back check` before submitting your PR
+
+## Configuration
+
+Optional config at `~/.give-back/config.yaml`:
+
+```yaml
+workspace_dir: ~/give-back-workspaces
+handoff:
+  command: "code ."
+```
+
+## Claude Code skill
+
+give-back ships a Claude Code skill for guided contribution workflows.
+Install the skill to get `/give-back` as a slash command in Claude Code:
+
+```bash
+mkdir -p ~/.claude/skills/give-back
+cp skills/SKILL.md ~/.claude/skills/give-back/SKILL.md
+```
+
+Then use `/give-back grafana/alloy` or natural language like "help me
+contribute to grafana/alloy". The skill orchestrates the full workflow
+(assess, triage, conventions, prepare, check), interprets output, and
+guides decisions at each step.
+
+## LLM-assisted features
+
+If `ANTHROPIC_API_KEY` is set, give-back uses Claude Haiku to classify
+unrecognized licenses. This is purely additive and falls back gracefully
+when no API key is available.
