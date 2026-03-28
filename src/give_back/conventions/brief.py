@@ -90,6 +90,12 @@ def _generate_notes(brief: ContributionBrief) -> list[str]:
 
     if brief.pr_template is not None:
         notes.append("PR template found — fill out all required sections")
+        # Check if template has a checklist
+        if brief.pr_template.raw_content and "- [" in brief.pr_template.raw_content:
+            notes.append(
+                "PR template has a checklist — remove items that don't apply "
+                "(don't leave them unchecked unless the template says otherwise)"
+            )
 
     if brief.commit_format.style == "conventional":
         prefix = brief.commit_format.prefix_pattern or "type:"

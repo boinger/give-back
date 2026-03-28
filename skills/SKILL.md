@@ -130,8 +130,16 @@ Summarize the key conventions the user needs to follow:
 - Whether DCO sign-off is required (`git commit -s`)
 - Merge strategy (squash, rebase, merge)
 - PR template sections to fill out
+- PR template checklist handling (see below)
 - Test framework and how to run tests
 - Linter/formatter and config
+
+**PR template checklists:** When a project has a PR template with a
+checklist, remove items that don't apply to your change. Do NOT leave
+irrelevant items unchecked. Many projects' CONTRIBUTING.md explicitly
+requires removing inapplicable items, and leaving them in signals that
+you didn't read the guidelines. Only keep unchecked items if the template
+itself says to leave them.
 
 This is the "read the room before you speak" step. Following conventions
 dramatically increases the chance of a PR getting merged.
