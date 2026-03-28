@@ -35,7 +35,7 @@ def _make_pr(
         ]
     reviews = []
     if has_reviews:
-        reviews = [{"createdAt": created_at}]
+        reviews = [{"createdAt": created_at, "author": {"login": "reviewer"}, "authorAssociation": "MEMBER"}]
 
     return {
         "state": "MERGED" if merged else "CLOSED",
@@ -137,3 +137,82 @@ class TestGhostClosing:
         result = evaluate_ghost_closing(data)
         assert result.details["external_closed"] == 3
         assert result.details["ghost_closed"] == 0
+
+
+class TestGhostClosingBotAwareness:
+    """Bot-only comments should still count as ghost-closed."""
+
+    def _make_pr_with_bot_comment(self, bot_login, human_comment=False):
+        """PR with a bot comment and optionally a human comment."""
+        comments = [
+            {
+                "createdAt": "2026-03-01T10:05:00Z",
+                "author": {"login": bot_login},
+                "authorAssociation": "MEMBER",
+            },
+        ]
+        if human_comment:
+            comments.append(
+                {
+                    "createdAt": "2026-03-01T12:00:00Z",
+                    "author": {"login": "human-maintainer"},
+                    "authorAssociation": "MEMBER",
+                }
+            )
+        return {
+            "state": "CLOSED",
+            "merged": False,
+            "mergedAt": None,
+            "closedAt": "2026-03-05T10:00:00Z",
+            "createdAt": "2026-03-01T10:00:00Z",
+            "author": {"login": "ext-dev"},
+            "authorAssociation": "CONTRIBUTOR",
+            "comments": {"nodes": comments},
+            "reviews": {"nodes": []},
+        }
+
+    def test_bot_only_comment_counts_as_ghost(self):
+        """PR with only a CLA bot comment is still ghost-closed."""
+        prs = [self._make_pr_with_bot_comment("CLAassistant[bot]") for _ in range(12)]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_ghost_closing(data)
+        assert result.details["ghost_closed"] == 12
+        assert result.score == 0.0
+
+    def test_bot_plus_human_not_ghost(self):
+        """PR with bot comment AND human comment is not ghost-closed."""
+        prs = [self._make_pr_with_bot_comment("CLAassistant[bot]", human_comment=True) for _ in range(12)]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_ghost_closing(data)
+        assert result.details["ghost_closed"] == 0
+        assert result.score == 1.0
+
+    def test_known_bot_comment_counts_as_ghost(self):
+        """PR with only a known bot (stale) comment is ghost-closed."""
+        prs = [self._make_pr_with_bot_comment("stale") for _ in range(12)]
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_ghost_closing(data)
+        assert result.details["ghost_closed"] == 12
+
+    def test_bot_review_counts_as_ghost(self):
+        """PR with only a bot review (no human review) is ghost-closed."""
+        prs = []
+        for _ in range(12):
+            prs.append({
+                "state": "CLOSED",
+                "merged": False,
+                "mergedAt": None,
+                "closedAt": "2026-03-05T10:00:00Z",
+                "createdAt": "2026-03-01T10:00:00Z",
+                "author": {"login": "ext-dev"},
+                "authorAssociation": "CONTRIBUTOR",
+                "comments": {"nodes": []},
+                "reviews": {"nodes": [{
+                    "createdAt": "2026-03-01T10:02:00Z",
+                    "author": {"login": "codecov[bot]"},
+                    "authorAssociation": "MEMBER",
+                }]},
+            })
+        data = _make_repo_data(_make_graphql(prs))
+        result = evaluate_ghost_closing(data)
+        assert result.details["ghost_closed"] == 12

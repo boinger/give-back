@@ -18,6 +18,7 @@ import statistics
 from datetime import datetime, timedelta, timezone
 
 from give_back.models import RepoData, SignalResult, SignalWeight, score_to_tier
+from give_back.signals._bots import is_bot as _is_bot
 
 NAME = "Time-to-first-response"
 WEIGHT = SignalWeight.MEDIUM
@@ -25,29 +26,6 @@ WEIGHT = SignalWeight.MEDIUM
 INTERNAL_ASSOCIATIONS = {"MEMBER", "OWNER", "COLLABORATOR"}
 LOW_SAMPLE_THRESHOLD = 10
 MONTHS_WINDOW = 12
-
-# Bot account suffixes and known bot logins. Bots responding instantly
-# inflate response time scores and don't reflect maintainer engagement.
-_BOT_SUFFIXES = ("[bot]", "-bot")
-_KNOWN_BOTS = frozenset({
-    "dependabot",
-    "renovate",
-    "codecov",
-    "stale",
-    "CLAassistant",
-    "allcontributors",
-    "netlify",
-    "vercel",
-    "sonarcloud",
-    "codeclimate",
-    "snyk-bot",
-    "imgbot",
-    "greenkeeper",
-    "depfu",
-    "mergify",
-    "kodiakhq",
-    "gitguardian",
-})
 
 # Score thresholds (hours)
 THRESHOLDS = [
@@ -57,16 +35,6 @@ THRESHOLDS = [
     (720, 0.3),
 ]
 FALLBACK_SCORE = 0.1
-
-
-def _is_bot(login: str | None) -> bool:
-    """Return True if the login looks like a bot account."""
-    if not login:
-        return False
-    lower = login.lower()
-    if lower in _KNOWN_BOTS:
-        return True
-    return any(lower.endswith(suffix) for suffix in _BOT_SUFFIXES)
 
 
 def _hours_to_score(hours: float) -> float:

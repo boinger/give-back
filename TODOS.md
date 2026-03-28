@@ -36,9 +36,9 @@ falls back to manual review link when no API key is available.
   known CLA services (CLA Assistant, EasyCLA) in recent PR comments/checks.
   Surface in brief ("CLA required, sign before submitting") and warn in
   `give-back check`. Prompted by grafana/alloy requiring CLA sign-off.
-- **Ghost-closing bot awareness** — currently a bot-only comment (e.g. CLA bot)
-  prevents a PR from being counted as ghost-closed. A PR closed with only bot
-  comments and no human follow-up is still effectively ghost-closed.
+- ~~**Ghost-closing bot awareness**~~ DONE — PRs with only bot comments/reviews
+  (CLA bots, CI bots, stale bots) now correctly count as ghost-closed. Bot
+  detection shared between ghost_closing and time_to_response via _bots.py.
 - ~~**Go module resolution**~~ DONE — resolves non-GitHub Go module hosts
   (gopkg.in, k8s.io, sigs.k8s.io, go.uber.org, etc.) via go-import HTML meta
   tags. Caches results per session. Skips "mod" proxy entries, only extracts

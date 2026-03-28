@@ -1,6 +1,7 @@
 """HIGH signal (negative): Ghost-closing rate.
 
-Measures the proportion of external PRs that were closed without any comment or review.
+Measures the proportion of external PRs that were closed without any human comment or review.
+Bot-only responses (CLA bots, CI bots, stale bots) don't count as feedback.
 Ghost-closing — silently closing PRs without feedback — is a strong negative signal that
 discourages future contributions.
 
@@ -14,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from give_back.models import RepoData, SignalResult, SignalWeight, score_to_tier
+from give_back.signals._bots import is_bot
 
 NAME = "Ghost-closing rate"
 WEIGHT = SignalWeight.HIGH
@@ -59,11 +61,20 @@ def evaluate_ghost_closing(data: RepoData) -> SignalResult:
 
         external_closed += 1
 
-        # Check if PR has any comments or reviews
+        # Check if PR has any human (non-bot) comments or reviews
         comments = (pr.get("comments") or {}).get("nodes") or []
         reviews = (pr.get("reviews") or {}).get("nodes") or []
 
-        if len(comments) == 0 and len(reviews) == 0:
+        has_human_comment = any(
+            not is_bot((c.get("author") or {}).get("login"))
+            for c in comments
+        )
+        has_human_review = any(
+            not is_bot((r.get("author") or {}).get("login"))
+            for r in reviews
+        )
+
+        if not has_human_comment and not has_human_review:
             ghost_closed += 1
 
     # No external PRs found
