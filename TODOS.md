@@ -39,6 +39,9 @@ falls back to manual review link when no API key is available.
 - **Ghost-closing bot awareness** — currently a bot-only comment (e.g. CLA bot)
   prevents a PR from being counted as ghost-closed. A PR closed with only bot
   comments and no human follow-up is still effectively ghost-closed.
+- ~~**Go module resolution**~~ DONE — resolves non-GitHub Go module hosts
+  (gopkg.in, k8s.io, sigs.k8s.io, go.uber.org, etc.) via go-import HTML meta
+  tags. Caches results per session. Skips "mod" proxy entries, only extracts
+  git VCS pointing to GitHub.
 - **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
-- **Go module proxy resolution** — resolve gopkg.in, k8s.io and other non-GitHub Go hosts.
 - **PR pagination** — paginate to fill the 12-month window for prolific repos.

@@ -2,7 +2,8 @@
 
 Supports:
 - PyPI packages: looks up project_urls via PyPI JSON API for GitHub links
-- Go modules: parses github.com paths directly, handles golang.org/x special case
+- Go modules: parses github.com paths directly, handles golang.org/x special case,
+  resolves non-GitHub hosts (gopkg.in, k8s.io, etc.) via go-import meta tags
 
 No external dependencies beyond httpx (already in project deps).
 """
@@ -19,6 +20,18 @@ _PYPI_TIMEOUT = 10.0  # seconds
 _PYPI_URL_KEYS = ("source", "repository", "source code", "github", "homepage", "code")
 
 _GITHUB_REPO_RE = re.compile(r"https?://github\.com/([^/]+)/([^/#?]+)")
+
+# go-import meta tag: <meta name="go-import" content="prefix vcs repo-url">
+# Handles both single and double quotes in attributes.
+_GO_IMPORT_RE = re.compile(
+    r"""<meta\s+name=["']go-import["']\s+content=["']([^"']+)["']""",
+    re.IGNORECASE,
+)
+_GO_GET_TIMEOUT = 5.0
+
+# Module-level cache: import-prefix → GitHub slug (or None for failed lookups).
+# Session-scoped — lives for one CLI invocation.
+_go_meta_cache: dict[str, str | None] = {}
 
 
 def resolve_pypi(package_name: str) -> str | None:
@@ -67,28 +80,78 @@ def resolve_pypi(package_name: str) -> str | None:
 def resolve_go_module(module_path: str) -> str | None:
     """Resolve a Go module path to a GitHub owner/repo slug.
 
-    Handles:
-    - ``github.com/foo/bar`` -> ``foo/bar``
-    - ``github.com/foo/bar/v2`` -> ``foo/bar`` (strip version suffix)
-    - ``github.com/foo/bar/pkg/sub`` -> ``foo/bar`` (strip sub-packages)
-    - ``golang.org/x/net`` -> ``golang/net``
-    - Non-GitHub hosts -> ``None``
+    Resolution order (fast paths first, then HTTP fallback):
+    1. ``github.com/foo/bar`` -> ``foo/bar`` (direct parse, no HTTP)
+    2. ``golang.org/x/net`` -> ``golang/net`` (known mapping, no HTTP)
+    3. Everything else -> fetch ``?go-get=1`` and parse go-import meta tag
     """
-    # golang.org/x special case
-    if module_path.startswith("golang.org/x/"):
-        parts = module_path.split("/")
-        if len(parts) >= 3:
-            return f"golang/{parts[2]}"
-        return None
-
-    # GitHub paths
+    # Fast path: github.com (no HTTP needed)
     if module_path.startswith("github.com/"):
         parts = module_path.split("/")
         if len(parts) >= 3:
             return f"{parts[1]}/{parts[2]}"
         return None
 
-    # Non-GitHub hosts (gopkg.in, k8s.io, etc.) — skip for v1
+    # Fast path: golang.org/x (known mapping, no HTTP needed)
+    if module_path.startswith("golang.org/x/"):
+        parts = module_path.split("/")
+        if len(parts) >= 3:
+            return f"golang/{parts[2]}"
+        return None
+
+    # HTTP fallback: resolve via go-import meta tag
+    return _resolve_go_via_meta(module_path)
+
+
+def _resolve_go_via_meta(module_path: str) -> str | None:
+    """Resolve a Go module path via the go-import HTML meta tag.
+
+    Fetches ``https://{path}?go-get=1`` and parses the
+    ``<meta name="go-import" content="{prefix} {vcs} {repo-url}">`` tag.
+    Only extracts GitHub URLs from git VCS entries (skips "mod" proxy entries).
+
+    Uses a module-level cache to avoid repeat HTTP lookups for the same host prefix.
+    Caches both positive results (GitHub slug) and negative results (None).
+    """
+    # Check cache first (prefix match)
+    for prefix, slug in _go_meta_cache.items():
+        if module_path == prefix or module_path.startswith(prefix + "/"):
+            return slug
+
+    # Try progressively shorter paths until we get a valid go-import response
+    parts = module_path.split("/")
+    for end in range(len(parts), 1, -1):
+        candidate = "/".join(parts[:end])
+        try:
+            resp = httpx.get(
+                f"https://{candidate}?go-get=1",
+                timeout=_GO_GET_TIMEOUT,
+                follow_redirects=True,
+            )
+        except (httpx.HTTPError, httpx.TimeoutException):
+            continue
+
+        if resp.status_code != 200:
+            continue
+
+        # Find all go-import meta tags and match the right prefix
+        for match in _GO_IMPORT_RE.finditer(resp.text):
+            fields = match.group(1).split()
+            if len(fields) < 3:
+                continue
+            import_prefix, vcs_type, repo_url = fields[0], fields[1], fields[2]
+            # Only handle git VCS (skip "mod" proxy entries)
+            if vcs_type != "git":
+                continue
+            # Check prefix matches our module path
+            if module_path == import_prefix or module_path.startswith(import_prefix + "/"):
+                slug = _extract_github_slug(repo_url)
+                _go_meta_cache[import_prefix] = slug
+                return slug
+
+    # Cache negative result to avoid retrying failed hosts
+    root = "/".join(parts[:min(len(parts), 3)])
+    _go_meta_cache[root] = None
     return None
 
 
