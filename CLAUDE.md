@@ -25,6 +25,7 @@ CLI (cli.py)
   ├── sniff ──► identify files → fetch content → heuristic assessment
   │     ├── sniff/files.py ──► extract file paths from issue body
   │     └── sniff/assess.py ──► file size, tests, churn, nesting → verdict
+  ├── prepare/lifecycle.py ──► workspace state machine (working → pr_open → merged)
   ├── auth.py ──► GITHUB_TOKEN / gh CLI / unauthenticated
   ├── github_client.py ──► httpx ──► GitHub API (GraphQL + REST)
   └── output.py ──► rich (tables + summaries + JSON)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from give_back.conventions.models import ContributionBrief
@@ -14,6 +15,8 @@ def write_brief(
     issue_number: int | None,
     branch_name: str,
     upstream_owner: str,
+    fork_owner: str | None = None,
+    previous_issues: list[dict] | None = None,
 ) -> Path:
     """Write human-readable brief and machine-readable context to workspace.
 
@@ -30,7 +33,11 @@ def write_brief(
 
     context_path = give_back_dir / "context.json"
     context_path.write_text(
-        json.dumps(_build_context(brief, issue_number, branch_name, upstream_owner), indent=2) + "\n"
+        json.dumps(
+            _build_context(brief, issue_number, branch_name, upstream_owner, fork_owner, previous_issues),
+            indent=2,
+        )
+        + "\n"
     )
 
     _add_to_git_exclude(workspace_dir)
@@ -180,6 +187,8 @@ def _build_context(
     issue_number: int | None,
     branch_name: str,
     upstream_owner: str,
+    fork_owner: str | None = None,
+    previous_issues: list[dict] | None = None,
 ) -> dict:
     """Build machine-readable context dict for the check command."""
     ci_commands: list[str] = []
@@ -190,18 +199,27 @@ def _build_context(
     if lint_cmd:
         ci_commands.append(lint_cmd)
 
+    now = datetime.now(timezone.utc).isoformat()
+
     return {
         "upstream_owner": upstream_owner,
         "repo": brief.repo,
         "issue_number": issue_number,
         "branch_name": branch_name,
         "default_branch": brief.default_branch,
+        "fork_owner": fork_owner,
         "dco_required": brief.dco_required,
         "cla_required": brief.cla_required,
         "test_command": brief.test_info.run_command,
         "lint_command": lint_cmd or None,
         "ci_commands": ci_commands,
         "has_pr_template": brief.pr_template is not None,
+        "status": "working",
+        "pr_url": None,
+        "pr_number": None,
+        "created_at": now,
+        "updated_at": now,
+        "previous_issues": previous_issues or [],
     }
 
 

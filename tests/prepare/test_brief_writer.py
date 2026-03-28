@@ -173,3 +173,36 @@ def test_no_issue_number(tmp_path: Path) -> None:
     assert "No specific issue" in content
     ctx = json.loads((workspace / ".give-back" / "context.json").read_text())
     assert ctx["issue_number"] is None
+
+
+def test_context_has_lifecycle_fields(tmp_path: Path) -> None:
+    """New lifecycle fields appear in context.json."""
+    workspace = _setup_git_dir(tmp_path)
+    brief = _make_brief()
+
+    write_brief(
+        workspace, brief, issue_number=1, branch_name="fix/1-test", upstream_owner="pallets",
+        fork_owner="myuser", previous_issues=[{"issue_number": 99, "status": "merged"}],
+    )
+
+    ctx = json.loads((workspace / ".give-back" / "context.json").read_text())
+    assert ctx["status"] == "working"
+    assert ctx["fork_owner"] == "myuser"
+    assert ctx["pr_url"] is None
+    assert ctx["pr_number"] is None
+    assert "created_at" in ctx
+    assert "updated_at" in ctx
+    assert ctx["previous_issues"] == [{"issue_number": 99, "status": "merged"}]
+
+
+def test_context_defaults_without_lifecycle_params(tmp_path: Path) -> None:
+    """Omitting fork_owner and previous_issues produces safe defaults."""
+    workspace = _setup_git_dir(tmp_path)
+    brief = _make_brief()
+
+    write_brief(workspace, brief, issue_number=1, branch_name="fix/1-test", upstream_owner="pallets")
+
+    ctx = json.loads((workspace / ".give-back" / "context.json").read_text())
+    assert ctx["status"] == "working"
+    assert ctx["fork_owner"] is None
+    assert ctx["previous_issues"] == []

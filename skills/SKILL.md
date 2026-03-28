@@ -158,7 +158,19 @@ Available flags:
   `~/give-back-workspaces`.
 
 This forks the repo, clones the fork, creates a branch from upstream, and
-writes a contribution brief. Tell the user:
+writes a contribution brief.
+
+**Lifecycle handling:** If the workspace already exists with a different issue,
+prepare will automatically handle the transition:
+- If the old branch has unpushed work or uncommitted changes, prepare will
+  BLOCK and tell the user to commit+push, stash, or discard first.
+- If the old branch was pushed with a PR, prepare archives it and moves on.
+- If the old branch had no work, prepare cleans it up silently.
+
+If prepare reports archiving a previous issue, inform the user about the
+transition (e.g., "Archived issue #100, PR submitted at ...").
+
+Tell the user:
 
 1. Where the workspace was created
 2. The branch name
@@ -183,6 +195,16 @@ cd <workspace_path> && give-back check --verbose
 Interpret the results. Any BLOCK severity means the user needs to fix
 something before submitting. WARN items are worth addressing but won't
 prevent submission.
+
+**PR status awareness:** `check` now detects if a PR already exists for the
+current branch and updates context.json with the PR status.
+
+- If check reports **pr_open**: The user's PR is already submitted. Do NOT
+  offer to "continue work" or "submit a PR." Instead, offer to help with
+  review feedback or address requested changes.
+- If check reports **merged**: The contribution was merged. Congratulate
+  the user. No further action needed on this issue.
+- If no PR is detected: Normal flow, user hasn't submitted yet.
 
 ## Skipping steps
 

@@ -504,12 +504,14 @@ def prepare(
     off to your editor.
     """
     import subprocess
+    from pathlib import Path
 
     from give_back.conventions.brief import scan_conventions
     from give_back.conventions.models import ContributionBrief
     from give_back.prepare.action_plan import generate_action_plan
     from give_back.prepare.brief_writer import write_brief
     from give_back.prepare.fork import ensure_fork
+    from give_back.prepare.lifecycle import ResolveAction, read_workspace_context, resolve_old_workspace
     from give_back.prepare.workspace import generate_branch_name, setup_workspace
 
     # 1. Parse repo argument
@@ -529,7 +531,42 @@ def prepare(
     config = load_config()
     effective_workspace_dir = workspace_dir or config.workspace_dir
 
-    # 4. Convention scan (unless --skip-conventions)
+    # 4. Ensure fork exists (moved earlier — needed for lifecycle PR search)
+    try:
+        fork_owner, fork_repo = ensure_fork(owner, repo_name)
+    except ForkError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    # 5. Check for existing workspace and handle lifecycle
+    clone_dir = Path(effective_workspace_dir).expanduser() / owner / repo_name
+    old_context = read_workspace_context(clone_dir)
+    previous_issues: list[dict] = []
+
+    if old_context is not None:
+        old_issue = old_context.get("issue_number")
+        if old_issue is not None and old_issue != issue:
+            # Different issue — resolve old workspace
+            try:
+                with GitHubClient(token=token) as client:
+                    result = resolve_old_workspace(clone_dir, old_context, client, fork_owner)
+            except GiveBackError:
+                # API failure — try without PR detection
+                result = resolve_old_workspace(clone_dir, old_context)
+
+            if result.action == ResolveAction.BLOCK_UNPUSHED:
+                _console.print(f"[red]Error:[/red] {result.message}")
+                sys.exit(1)
+
+            _console.print(f"  [dim]{result.message}[/dim]")
+            previous_issues = old_context.get("previous_issues", [])
+            if result.archived_entry:
+                previous_issues.append(result.archived_entry)
+        elif old_issue == issue:
+            # Same issue — idempotent re-prepare, preserve history
+            previous_issues = old_context.get("previous_issues", [])
+
+    # 6. Convention scan (unless --skip-conventions)
     brief: ContributionBrief
     if skip_conventions:
         if verbose:
@@ -567,21 +604,14 @@ def prepare(
             _console.print(f"[red]Error:[/red] {exc}")
             sys.exit(1)
 
-    # 5. Ensure fork exists
-    try:
-        fork_owner, fork_repo = ensure_fork(owner, repo_name)
-    except ForkError as exc:
-        _console.print(f"[red]Error:[/red] {exc}")
-        sys.exit(1)
-
-    # 6. Generate branch name
+    # 7. Generate branch name
     branch_name = generate_branch_name(
         brief.branch_convention,
         issue or 0,
         brief.issue_title or "contribution",
     )
 
-    # 7. Set up workspace (clone, remotes, branch)
+    # 8. Set up workspace (clone, remotes, branch)
     try:
         workspace_path = setup_workspace(
             fork_owner=fork_owner,
@@ -596,14 +626,18 @@ def prepare(
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
-    # 8. Write brief
+    # 9. Write brief (with lifecycle context)
     try:
-        write_brief(workspace_path, brief, issue, branch_name, owner)
+        write_brief(
+            workspace_path, brief, issue, branch_name, owner,
+            fork_owner=fork_owner,
+            previous_issues=previous_issues,
+        )
     except OSError as exc:
         _console.print(f"[red]Error:[/red] Cannot write brief: {exc}")
         sys.exit(1)
 
-    # 9. Generate and print action plan (or JSON output)
+    # 10. Generate and print action plan (or JSON output)
     action_plan_text = generate_action_plan(brief, workspace_path, branch_name, owner)
 
     if json_output:
@@ -724,14 +758,43 @@ def check(verbose: bool) -> None:
 
     results.append(check_local_ci(ci_commands if ci_commands else None, ci_results=None))
 
-    # 5. If auth is available, check for duplicate PRs
+    # 5. If auth is available, check for duplicate PRs and detect PR status
     token = resolve_token()
     if token is not None:
         try:
             with GitHubClient(token=token) as client:
                 results.append(check_duplicate_pr(client, upstream_owner, repo_name, issue_number))
+
+                # 5.5 PR detection — check if a PR exists for this branch
+                if branch_name:
+                    from give_back.guardrails import Severity
+                    from give_back.prepare.lifecycle import (
+                        find_pr_for_branch,
+                        parse_fork_owner_from_remote,
+                        update_context_status,
+                    )
+
+                    fork_owner = context.get("fork_owner")
+                    if not fork_owner:
+                        fork_owner = parse_fork_owner_from_remote(cwd)
+
+                    if fork_owner:
+                        pr_info = find_pr_for_branch(client, upstream_owner, repo_name, fork_owner, branch_name)
+                        if pr_info:
+                            status = "merged" if pr_info.state == "merged" else "pr_open"
+                            update_context_status(cwd, status, pr_info.pr_url, pr_info.pr_number)
+                            from give_back.guardrails import GuardrailResult
+
+                            results.append(
+                                GuardrailResult(
+                                    name="pr_status",
+                                    severity=Severity.INFO,
+                                    passed=True,
+                                    message=f"PR #{pr_info.pr_number} ({pr_info.state}): {pr_info.pr_url}",
+                                )
+                            )
         except (AuthenticationError, RateLimitError, GiveBackError):
-            pass  # Skip duplicate check if API fails
+            pass  # Skip API checks if they fail
 
     # 6. Print results
     print_check_results(results, upstream_owner, repo_name, issue_number, verbose=verbose)
