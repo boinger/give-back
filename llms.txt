@@ -100,7 +100,9 @@ compliance, unrelated changes, base branch freshness, and duplicate PRs.
 ### deps <repo>
 
 Walk a project's dependencies and assess each for contribution viability.
-Supports go.mod, pyproject.toml, and requirements.txt.
+Supports go.mod, Cargo.toml, pyproject.toml, package.json, Gemfile,
+and requirements.txt. Resolves packages to GitHub repos via PyPI, crates.io,
+npm registry, RubyGems, and Go module go-import meta tags.
 
 ### skip / unskip <repo>
 

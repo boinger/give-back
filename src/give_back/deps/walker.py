@@ -14,7 +14,14 @@ from rich.console import Console
 from rich.progress import Progress
 
 from give_back.deps.filter import filter_candidates
-from give_back.deps.parser import parse_gomod, parse_pyproject, parse_requirements_txt
+from give_back.deps.parser import (
+    parse_cargo_toml,
+    parse_gemfile,
+    parse_gomod,
+    parse_package_json,
+    parse_pyproject,
+    parse_requirements_txt,
+)
 from give_back.deps.resolver import resolve_packages
 from give_back.exceptions import GiveBackError, RepoNotFoundError
 from give_back.github_client import GitHubClient
@@ -43,7 +50,7 @@ class WalkResult:
 
     primary_owner: str
     primary_repo: str
-    ecosystem: str  # "python" or "go"
+    ecosystem: str  # "python", "go", "rust", "node", or "ruby"
     results: list[DepResult] = field(default_factory=list)
     filter_stats: dict = field(default_factory=dict)
     total_packages: int = 0  # before filtering
@@ -198,29 +205,35 @@ def _detect_and_parse(client: GitHubClient, owner: str, repo: str, verbose: bool
     Returns (ecosystem, list_of_package_names).
     Raises NoManifestError if no supported manifest is found.
     """
-    # Try go.mod first
-    content = _try_fetch_file(client, owner, repo, "go.mod")
-    if content is not None:
-        if verbose:
-            _console.print("  [dim]Found go.mod — Go project[/dim]")
-        return "go", parse_gomod(content)
+    # Detection order: language-specific lockfiles first, then generic manifests.
+    manifests: list[tuple[str, str, str]] = [
+        ("go.mod", "go", "Go"),
+        ("Cargo.toml", "rust", "Rust"),
+        ("pyproject.toml", "python", "Python"),
+        ("package.json", "node", "Node.js"),
+        ("Gemfile", "ruby", "Ruby"),
+        ("requirements.txt", "python", "Python"),
+    ]
 
-    # Try pyproject.toml
-    content = _try_fetch_file(client, owner, repo, "pyproject.toml")
-    if content is not None:
-        if verbose:
-            _console.print("  [dim]Found pyproject.toml — Python project[/dim]")
-        return "python", parse_pyproject(content)
+    parsers = {
+        "go.mod": parse_gomod,
+        "Cargo.toml": parse_cargo_toml,
+        "pyproject.toml": parse_pyproject,
+        "package.json": parse_package_json,
+        "Gemfile": parse_gemfile,
+        "requirements.txt": parse_requirements_txt,
+    }
 
-    # Try requirements.txt
-    content = _try_fetch_file(client, owner, repo, "requirements.txt")
-    if content is not None:
-        if verbose:
-            _console.print("  [dim]Found requirements.txt — Python project[/dim]")
-        return "python", parse_requirements_txt(content)
+    for filename, ecosystem, label in manifests:
+        content = _try_fetch_file(client, owner, repo, filename)
+        if content is not None:
+            if verbose:
+                _console.print(f"  [dim]Found {filename} — {label} project[/dim]")
+            return ecosystem, parsers[filename](content)
 
     raise NoManifestError(
-        f"No supported manifest file found in {owner}/{repo}. Looked for: go.mod, pyproject.toml, requirements.txt"
+        f"No supported manifest file found in {owner}/{repo}. "
+        "Looked for: go.mod, Cargo.toml, pyproject.toml, package.json, Gemfile, requirements.txt"
     )
 
 

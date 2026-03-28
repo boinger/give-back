@@ -155,17 +155,115 @@ def _resolve_go_via_meta(module_path: str) -> str | None:
     return None
 
 
+def resolve_crates_io(crate_name: str) -> str | None:
+    """Resolve a Rust crate name to a GitHub owner/repo slug.
+
+    Calls the crates.io API and inspects the ``repository`` field for a GitHub URL.
+    """
+    url = f"https://crates.io/api/v1/crates/{crate_name}"
+    try:
+        response = httpx.get(
+            url,
+            timeout=_PYPI_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": "give-back (https://github.com/boinger/give-back)"},
+        )
+    except (httpx.TimeoutException, httpx.HTTPError):
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    repo_url = (data.get("crate") or {}).get("repository") or ""
+    return _extract_github_slug(repo_url)
+
+
+def resolve_npm(package_name: str) -> str | None:
+    """Resolve an npm package name to a GitHub owner/repo slug.
+
+    Calls the npm registry and inspects the ``repository`` field for a GitHub URL.
+    Handles scoped packages (``@scope/name``).
+    """
+    url = f"https://registry.npmjs.org/{package_name}"
+    try:
+        response = httpx.get(url, timeout=_PYPI_TIMEOUT, follow_redirects=True)
+    except (httpx.TimeoutException, httpx.HTTPError):
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    repo = data.get("repository") or {}
+    if isinstance(repo, str):
+        repo_url = repo
+    elif isinstance(repo, dict):
+        repo_url = repo.get("url", "")
+    else:
+        return None
+
+    return _extract_github_slug(repo_url)
+
+
+def resolve_rubygems(gem_name: str) -> str | None:
+    """Resolve a Ruby gem name to a GitHub owner/repo slug.
+
+    Calls the RubyGems API and inspects ``source_code_uri`` and ``homepage_uri``
+    for a GitHub URL.
+    """
+    url = f"https://rubygems.org/api/v1/gems/{gem_name}.json"
+    try:
+        response = httpx.get(url, timeout=_PYPI_TIMEOUT, follow_redirects=True)
+    except (httpx.TimeoutException, httpx.HTTPError):
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    # Check source_code_uri first, then homepage_uri
+    for key in ("source_code_uri", "homepage_uri"):
+        uri = data.get(key) or ""
+        slug = _extract_github_slug(uri)
+        if slug:
+            return slug
+
+    return None
+
+
+_ECOSYSTEM_RESOLVERS = {
+    "python": resolve_pypi,
+    "go": resolve_go_module,
+    "rust": resolve_crates_io,
+    "node": resolve_npm,
+    "ruby": resolve_rubygems,
+}
+
+
 def resolve_packages(packages: list[str], ecosystem: str) -> list[tuple[str, str | None]]:
     """Resolve a list of package names to GitHub slugs.
 
     Args:
-        packages: List of package names (PyPI names or Go module paths).
-        ecosystem: ``"python"`` or ``"go"``.
+        packages: List of package names.
+        ecosystem: ``"python"``, ``"go"``, ``"rust"``, ``"node"``, or ``"ruby"``.
 
     Returns:
         List of ``(package_name, owner_repo_or_none)`` tuples.
     """
-    resolver = resolve_pypi if ecosystem == "python" else resolve_go_module
+    resolver = _ECOSYSTEM_RESOLVERS.get(ecosystem, resolve_pypi)
     return [(pkg, resolver(pkg)) for pkg in packages]
 
 

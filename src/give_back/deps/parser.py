@@ -4,8 +4,11 @@ Supports:
 - go.mod (require block, skips replace directives with local paths)
 - pyproject.toml (PEP 621 [project].dependencies + Poetry [tool.poetry.dependencies])
 - requirements.txt (simple line-by-line, skips comments/-r/-e/URLs)
+- Cargo.toml (Rust [dependencies] + [dev-dependencies] + workspace members)
+- package.json (Node.js dependencies + devDependencies)
+- Gemfile (Ruby gem statements)
 
-No external dependencies — uses tomllib from Python 3.11+ stdlib.
+No external dependencies — uses tomllib and json from stdlib.
 """
 
 from __future__ import annotations
@@ -105,6 +108,85 @@ def parse_requirements_txt(content: str) -> list[str]:
             packages.append(name)
 
     return packages
+
+
+def parse_cargo_toml(content: str) -> list[str]:
+    """Parse Cargo.toml content and return a list of crate names.
+
+    Extracts from [dependencies], [dev-dependencies], and [build-dependencies].
+    Skips path-only dependencies (local crates).
+    """
+    try:
+        data = tomllib.loads(content)
+    except tomllib.TOMLDecodeError:
+        return []
+
+    crates: list[str] = []
+
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        deps = data.get(section, {})
+        for name, value in deps.items():
+            # Skip path-only deps (local workspace crates)
+            if isinstance(value, dict) and "path" in value and "version" not in value:
+                continue
+            crates.append(name)
+
+    return crates
+
+
+def parse_package_json(content: str) -> list[str]:
+    """Parse package.json content and return a list of npm package names.
+
+    Extracts from dependencies and devDependencies.
+    Skips local file references (file:, link:).
+    """
+    import json
+
+    try:
+        data = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    packages: list[str] = []
+
+    for section in ("dependencies", "devDependencies"):
+        deps = data.get(section, {})
+        if not isinstance(deps, dict):
+            continue
+        for name, version in deps.items():
+            # Skip local references
+            if isinstance(version, str) and (version.startswith("file:") or version.startswith("link:")):
+                continue
+            packages.append(name)
+
+    return packages
+
+
+def parse_gemfile(content: str) -> list[str]:
+    """Parse Gemfile content and return a list of gem names.
+
+    Extracts gem names from `gem 'name'` and `gem "name"` statements.
+    Skips commented lines and gems with path: or git: options pointing to local sources.
+    """
+    gems: list[str] = []
+
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        # Match: gem 'name' or gem "name" (with optional version/options after)
+        m = re.match(r"""gem\s+['"]([^'"]+)['"]""", line)
+        if not m:
+            continue
+
+        # Skip path-local gems
+        if "path:" in line or "path =>" in line:
+            continue
+
+        gems.append(m.group(1))
+
+    return gems
 
 
 def _extract_package_name(dep_spec: str) -> str | None:

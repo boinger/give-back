@@ -42,5 +42,8 @@ falls back to manual review link when no API key is available.
   (gopkg.in, k8s.io, sigs.k8s.io, go.uber.org, etc.) via go-import HTML meta
   tags. Caches results per session. Skips "mod" proxy entries, only extracts
   git VCS pointing to GitHub.
-- **Rust/Node/Ruby dep-walking** — Cargo.toml, package.json, Gemfile ecosystem support.
+- ~~**Rust/Node/Ruby dep-walking**~~ DONE — Cargo.toml (crates.io), package.json
+  (npm registry), Gemfile (RubyGems) parsing and resolution. Resolvers hit
+  crates.io, registry.npmjs.org, rubygems.org APIs for GitHub URL extraction.
+  Node.js builtins filtered. Walker detects all six manifest types.
 - **PR pagination** — paginate to fill the 12-month window for prolific repos.

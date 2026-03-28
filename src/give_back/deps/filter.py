@@ -73,6 +73,30 @@ GO_STDLIB: frozenset[str] = frozenset({
     "testing", "text", "time",
     "unicode", "unsafe",
 })
+
+# Node.js built-in modules (not on npm as separate packages)
+NODE_BUILTINS: frozenset[str] = frozenset({
+    "assert", "async_hooks",
+    "buffer",
+    "child_process", "cluster", "console", "constants", "crypto",
+    "dgram", "diagnostics_channel", "dns", "domain",
+    "events",
+    "fs",
+    "http", "http2", "https",
+    "inspector",
+    "module",
+    "net",
+    "os",
+    "path", "perf_hooks", "process", "punycode",
+    "querystring",
+    "readline", "repl",
+    "stream", "string_decoder", "sys",
+    "timers", "tls", "trace_events", "tty",
+    "url", "util",
+    "v8", "vm",
+    "wasi", "worker_threads",
+    "zlib",
+})
 # fmt: on
 
 # Well-known mega-projects that are unlikely to want drive-by contributions.
@@ -133,7 +157,7 @@ def filter_candidates(
     after_stdlib: list[tuple[str, str]] = []
     for pkg, slug in resolved:
         pkg_base = pkg.split("/")[0].split(".")[0]
-        if pkg_base in PYTHON_STDLIB or pkg_base in GO_STDLIB:
+        if pkg_base in PYTHON_STDLIB or pkg_base in GO_STDLIB or pkg_base in NODE_BUILTINS:
             stats["stdlib"] += 1
         else:
             after_stdlib.append((pkg, slug))

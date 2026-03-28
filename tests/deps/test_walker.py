@@ -101,6 +101,17 @@ _RATE_LIMIT_HEADERS = {
 }
 
 
+_ALL_MANIFESTS = ("go.mod", "Cargo.toml", "pyproject.toml", "package.json", "Gemfile", "requirements.txt")
+
+
+def _mock_no_manifests(owner: str, repo: str) -> None:
+    """Mock 404 for all manifest files. Override specific ones after calling this."""
+    for filename in _ALL_MANIFESTS:
+        respx.get(f"https://api.github.com/repos/{owner}/{repo}/contents/{filename}").mock(
+            return_value=httpx.Response(404, headers=_RATE_LIMIT_HEADERS)
+        )
+
+
 def _mock_github_assessment(router: respx.MockRouter, owner: str, repo: str) -> None:
     """Set up respx routes for a full viability assessment of a repo."""
     # GraphQL
@@ -123,12 +134,10 @@ class TestWalkPythonProject:
     @respx.mock
     def test_walk_pyproject(self):
         """Walk a Python project with pyproject.toml, resolving via PyPI."""
-        # 1. go.mod → 404
-        respx.get("https://api.github.com/repos/myorg/myproject/contents/go.mod").mock(
-            return_value=httpx.Response(404, headers=_RATE_LIMIT_HEADERS)
-        )
+        # All manifests → 404 first, then override the one we want
+        _mock_no_manifests("myorg", "myproject")
 
-        # 2. pyproject.toml → found
+        # pyproject.toml → found (overrides the 404 mock)
         respx.get("https://api.github.com/repos/myorg/myproject/contents/pyproject.toml").mock(
             return_value=httpx.Response(
                 200,
@@ -255,10 +264,7 @@ class TestNoManifestFound:
     @respx.mock
     def test_raises_on_no_manifest(self):
         """404 on all manifest files raises NoManifestError."""
-        for path in ("go.mod", "pyproject.toml", "requirements.txt"):
-            respx.get(f"https://api.github.com/repos/myorg/empty-project/contents/{path}").mock(
-                return_value=httpx.Response(404, headers=_RATE_LIMIT_HEADERS)
-            )
+        _mock_no_manifests("myorg", "empty-project")
 
         with GitHubClient(token="test-token") as client:
             with pytest.raises(NoManifestError, match="No supported manifest"):
@@ -281,9 +287,7 @@ dependencies = [
     "pkg-e",
 ]
 """
-        respx.get("https://api.github.com/repos/myorg/myproject/contents/go.mod").mock(
-            return_value=httpx.Response(404, headers=_RATE_LIMIT_HEADERS)
-        )
+        _mock_no_manifests("myorg", "myproject")
         respx.get("https://api.github.com/repos/myorg/myproject/contents/pyproject.toml").mock(
             return_value=httpx.Response(
                 200,
@@ -343,9 +347,7 @@ class TestUsesCache:
     @respx.mock
     def test_cached_assessment_returned_without_api_calls(self):
         """Cached assessments are used without making assessment API calls."""
-        respx.get("https://api.github.com/repos/myorg/myproject/contents/go.mod").mock(
-            return_value=httpx.Response(404, headers=_RATE_LIMIT_HEADERS)
-        )
+        _mock_no_manifests("myorg", "myproject")
         respx.get("https://api.github.com/repos/myorg/myproject/contents/pyproject.toml").mock(
             return_value=httpx.Response(
                 200,

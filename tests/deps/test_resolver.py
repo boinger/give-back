@@ -5,7 +5,14 @@ import pytest
 import respx
 
 from give_back.deps import resolver
-from give_back.deps.resolver import resolve_go_module, resolve_packages, resolve_pypi
+from give_back.deps.resolver import (
+    resolve_crates_io,
+    resolve_go_module,
+    resolve_npm,
+    resolve_packages,
+    resolve_pypi,
+    resolve_rubygems,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -360,3 +367,127 @@ class TestGoMetaResolution:
             )
         )
         assert resolve_go_module("quirky.example.com/pkg") == "owner/pkg"
+
+
+class TestResolveCratesIo:
+    @respx.mock
+    def test_crate_found(self):
+        respx.get("https://crates.io/api/v1/crates/serde").mock(
+            return_value=httpx.Response(
+                200,
+                json={"crate": {"repository": "https://github.com/serde-rs/serde"}},
+            )
+        )
+        assert resolve_crates_io("serde") == "serde-rs/serde"
+
+    @respx.mock
+    def test_crate_not_found(self):
+        respx.get("https://crates.io/api/v1/crates/nonexistent").mock(
+            return_value=httpx.Response(404)
+        )
+        assert resolve_crates_io("nonexistent") is None
+
+    @respx.mock
+    def test_crate_no_github(self):
+        respx.get("https://crates.io/api/v1/crates/nope").mock(
+            return_value=httpx.Response(
+                200,
+                json={"crate": {"repository": "https://gitlab.com/owner/nope"}},
+            )
+        )
+        assert resolve_crates_io("nope") is None
+
+    @respx.mock
+    def test_crate_timeout(self):
+        respx.get("https://crates.io/api/v1/crates/slow").mock(
+            side_effect=httpx.TimeoutException("timed out")
+        )
+        assert resolve_crates_io("slow") is None
+
+
+class TestResolveNpm:
+    @respx.mock
+    def test_npm_found_object_repo(self):
+        respx.get("https://registry.npmjs.org/express").mock(
+            return_value=httpx.Response(
+                200,
+                json={"repository": {"type": "git", "url": "git+https://github.com/expressjs/express.git"}},
+            )
+        )
+        assert resolve_npm("express") == "expressjs/express"
+
+    @respx.mock
+    def test_npm_found_string_repo(self):
+        respx.get("https://registry.npmjs.org/simple").mock(
+            return_value=httpx.Response(
+                200,
+                json={"repository": "https://github.com/owner/simple"},
+            )
+        )
+        assert resolve_npm("simple") == "owner/simple"
+
+    @respx.mock
+    def test_npm_not_found(self):
+        respx.get("https://registry.npmjs.org/nonexistent").mock(
+            return_value=httpx.Response(404)
+        )
+        assert resolve_npm("nonexistent") is None
+
+    @respx.mock
+    def test_npm_no_github(self):
+        respx.get("https://registry.npmjs.org/nope").mock(
+            return_value=httpx.Response(
+                200,
+                json={"repository": {"url": "https://bitbucket.org/owner/nope"}},
+            )
+        )
+        assert resolve_npm("nope") is None
+
+    @respx.mock
+    def test_npm_scoped_package(self):
+        respx.get("https://registry.npmjs.org/@babel/core").mock(
+            return_value=httpx.Response(
+                200,
+                json={"repository": {"url": "https://github.com/babel/babel.git"}},
+            )
+        )
+        assert resolve_npm("@babel/core") == "babel/babel"
+
+
+class TestResolveRubygems:
+    @respx.mock
+    def test_gem_found(self):
+        respx.get("https://rubygems.org/api/v1/gems/rails.json").mock(
+            return_value=httpx.Response(
+                200,
+                json={"source_code_uri": "https://github.com/rails/rails"},
+            )
+        )
+        assert resolve_rubygems("rails") == "rails/rails"
+
+    @respx.mock
+    def test_gem_homepage_fallback(self):
+        respx.get("https://rubygems.org/api/v1/gems/old-gem.json").mock(
+            return_value=httpx.Response(
+                200,
+                json={"source_code_uri": None, "homepage_uri": "https://github.com/owner/old-gem"},
+            )
+        )
+        assert resolve_rubygems("old-gem") == "owner/old-gem"
+
+    @respx.mock
+    def test_gem_not_found(self):
+        respx.get("https://rubygems.org/api/v1/gems/nonexistent.json").mock(
+            return_value=httpx.Response(404)
+        )
+        assert resolve_rubygems("nonexistent") is None
+
+    @respx.mock
+    def test_gem_no_github(self):
+        respx.get("https://rubygems.org/api/v1/gems/nope.json").mock(
+            return_value=httpx.Response(
+                200,
+                json={"source_code_uri": "https://gitlab.com/owner/nope", "homepage_uri": "https://example.com"},
+            )
+        )
+        assert resolve_rubygems("nope") is None

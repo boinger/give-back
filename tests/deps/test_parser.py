@@ -2,7 +2,14 @@
 
 from pathlib import Path
 
-from give_back.deps.parser import parse_gomod, parse_pyproject, parse_requirements_txt
+from give_back.deps.parser import (
+    parse_cargo_toml,
+    parse_gemfile,
+    parse_gomod,
+    parse_package_json,
+    parse_pyproject,
+    parse_requirements_txt,
+)
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "manifests"
 
@@ -126,3 +133,108 @@ class TestRequirementsTxt:
         content = "click>=8.1\nhttpx==0.27.0\nrich~=13.0\n"
         packages = parse_requirements_txt(content)
         assert packages == ["click", "httpx", "rich"]
+
+
+class TestCargoToml:
+    def test_basic_dependencies(self):
+        content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1", features = ["full"] }\n'
+        crates = parse_cargo_toml(content)
+        assert "serde" in crates
+        assert "tokio" in crates
+
+    def test_dev_dependencies(self):
+        content = '[dev-dependencies]\ncriterion = "0.5"\n'
+        crates = parse_cargo_toml(content)
+        assert "criterion" in crates
+
+    def test_skips_path_only(self):
+        content = '[dependencies]\nmy-local = { path = "../my-local" }\nremote = "1.0"\n'
+        crates = parse_cargo_toml(content)
+        assert "remote" in crates
+        assert "my-local" not in crates
+
+    def test_keeps_path_with_version(self):
+        content = '[dependencies]\nmy-crate = { path = "../my-crate", version = "1.0" }\n'
+        crates = parse_cargo_toml(content)
+        assert "my-crate" in crates
+
+    def test_empty(self):
+        assert parse_cargo_toml("") == []
+
+    def test_invalid_toml(self):
+        assert parse_cargo_toml("not valid {{}}") == []
+
+
+class TestPackageJson:
+    def test_basic_dependencies(self):
+        content = '{"dependencies": {"react": "^18.0", "lodash": "^4.17"}}'
+        packages = parse_package_json(content)
+        assert "react" in packages
+        assert "lodash" in packages
+
+    def test_dev_dependencies(self):
+        content = '{"devDependencies": {"jest": "^29.0", "typescript": "^5.0"}}'
+        packages = parse_package_json(content)
+        assert "jest" in packages
+        assert "typescript" in packages
+
+    def test_both_dep_types(self):
+        content = '{"dependencies": {"express": "^4.0"}, "devDependencies": {"mocha": "^10.0"}}'
+        packages = parse_package_json(content)
+        assert "express" in packages
+        assert "mocha" in packages
+
+    def test_scoped_packages(self):
+        content = '{"dependencies": {"@types/node": "^20.0", "@babel/core": "^7.0"}}'
+        packages = parse_package_json(content)
+        assert "@types/node" in packages
+        assert "@babel/core" in packages
+
+    def test_skips_file_references(self):
+        content = '{"dependencies": {"local-pkg": "file:../local", "remote": "^1.0"}}'
+        packages = parse_package_json(content)
+        assert "remote" in packages
+        assert "local-pkg" not in packages
+
+    def test_empty(self):
+        assert parse_package_json("") == []
+
+    def test_invalid_json(self):
+        assert parse_package_json("not json {") == []
+
+    def test_no_dependencies(self):
+        assert parse_package_json('{"name": "foo"}') == []
+
+
+class TestGemfile:
+    def test_basic_gems(self):
+        content = "gem 'rails', '~> 7.0'\ngem 'pg'\n"
+        gems = parse_gemfile(content)
+        assert "rails" in gems
+        assert "pg" in gems
+
+    def test_double_quotes(self):
+        content = 'gem "sidekiq"\n'
+        gems = parse_gemfile(content)
+        assert "sidekiq" in gems
+
+    def test_skips_comments(self):
+        content = "# gem 'old'\ngem 'new'\n"
+        gems = parse_gemfile(content)
+        assert "new" in gems
+        assert "old" not in gems
+
+    def test_skips_path_gems(self):
+        content = "gem 'local', path: '../local'\ngem 'remote'\n"
+        gems = parse_gemfile(content)
+        assert "remote" in gems
+        assert "local" not in gems
+
+    def test_skips_path_hashrocket(self):
+        content = "gem 'local', :path => '../local'\ngem 'remote'\n"
+        gems = parse_gemfile(content)
+        assert "remote" in gems
+        assert "local" not in gems
+
+    def test_empty(self):
+        assert parse_gemfile("") == []
