@@ -569,7 +569,7 @@ def prepare(
 
     # 5. Ensure fork exists
     try:
-        fork_owner = ensure_fork(owner, repo_name)
+        fork_owner, fork_repo = ensure_fork(owner, repo_name)
     except ForkError as exc:
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
@@ -585,6 +585,7 @@ def prepare(
     try:
         workspace_path = setup_workspace(
             fork_owner=fork_owner,
+            fork_repo=fork_repo,
             repo=repo_name,
             upstream_owner=owner,
             branch_name=branch_name,

@@ -176,7 +176,7 @@ class TestPrepareCommand:
         runner = CliRunner()
         with (
             patch("give_back.cli.GitHubClient") as mock_client_cls,
-            patch("give_back.prepare.fork.ensure_fork", return_value="myuser"),
+            patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace") as mock_ws,
         ):
             mock_client = MagicMock()
@@ -206,7 +206,7 @@ class TestPrepareCommand:
         runner = CliRunner()
         with (
             patch("give_back.cli.GitHubClient") as mock_client_cls,
-            patch("give_back.prepare.fork.ensure_fork", return_value="myuser"),
+            patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace", return_value=workspace_path),
             patch("give_back.prepare.workspace.generate_branch_name", return_value="give-back/0-contribution"),
             patch("give_back.prepare.brief_writer.write_brief") as mock_write_brief,
@@ -236,7 +236,7 @@ class TestPrepareCommand:
         runner = CliRunner()
         with (
             patch("give_back.cli.GitHubClient") as mock_client_cls,
-            patch("give_back.prepare.fork.ensure_fork", return_value="myuser"),
+            patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace", return_value=workspace_path),
             patch("give_back.prepare.workspace.generate_branch_name", return_value="give-back/0-contribution"),
             patch("give_back.prepare.brief_writer.write_brief"),

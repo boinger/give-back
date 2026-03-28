@@ -20,16 +20,20 @@ def setup_workspace(
     branch_name: str,
     default_branch: str,
     workspace_dir: str | Path,
+    fork_repo: str | None = None,
 ) -> Path:
     """Set up a contribution workspace: clone, remotes, branch.
 
     *workspace_dir* is the parent (e.g., ``~/give-back-workspaces``).
     The actual clone goes to ``workspace_dir/upstream_owner/repo/``.
+    *fork_repo* is the actual fork repo name, which may differ from *repo*
+    if the fork was renamed (e.g., ``alloy`` → ``grafana-alloy``).
 
     Returns the clone directory Path.
 
     Raises WorkspaceError on clone failure, wrong remote, or dirty branch.
     """
+    effective_fork_repo = fork_repo or repo
     workspace_dir = Path(workspace_dir).expanduser()
     clone_dir = workspace_dir / upstream_owner / repo
 
@@ -66,7 +70,7 @@ def setup_workspace(
             raise WorkspaceError(f"git fetch upstream failed: {result.stderr.strip()}")
     else:
         # Fresh setup
-        fork_url = f"https://github.com/{fork_owner}/{repo}.git"
+        fork_url = f"https://github.com/{fork_owner}/{effective_fork_repo}.git"
         clone_dir.parent.mkdir(parents=True, exist_ok=True)
 
         result = subprocess.run(
