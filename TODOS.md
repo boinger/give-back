@@ -31,11 +31,10 @@ falls back to manual review link when no API key is available.
 - ~~**Phase 4: Prepare Workspace**~~ DONE — `give-back prepare` forks, clones, branches,
   writes brief + context.json, runs configurable handoff. `give-back check` runs
   pre-flight guardrails in the workspace.
-- **CLA detection** — detect Contributor License Agreements in conventions scan.
-  Check for CLA bot configs (.github/workflows/cla*.yml, .clabot, cla.json),
-  known CLA services (CLA Assistant, EasyCLA) in recent PR comments/checks.
-  Surface in brief ("CLA required, sign before submitting") and warn in
-  `give-back check`. Prompted by grafana/alloy requiring CLA sign-off.
+- ~~**CLA detection**~~ DONE — detects CLA requirements via config files
+  (.clabot, cla.json, CLA.md), CI workflow patterns (CLA Assistant, EasyCLA),
+  and PR comment scanning for known CLA bot logins. Surfaces in convention
+  brief notes and warns in `give-back check`.
 - ~~**Ghost-closing bot awareness**~~ DONE — PRs with only bot comments/reviews
   (CLA bots, CI bots, stale bots) now correctly count as ghost-closed. Bot
   detection shared between ghost_closing and time_to_response via _bots.py.

@@ -197,6 +197,7 @@ def _build_context(
         "branch_name": branch_name,
         "default_branch": brief.default_branch,
         "dco_required": brief.dco_required,
+        "cla_required": brief.cla_required,
         "test_command": brief.test_info.run_command,
         "lint_command": lint_cmd or None,
         "ci_commands": ci_commands,

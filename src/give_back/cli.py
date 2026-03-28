@@ -639,6 +639,7 @@ def check(verbose: bool) -> None:
 
     from give_back.guardrails import (
         check_base_branch_freshness,
+        check_cla_signed,
         check_dco_signoff,
         check_duplicate_pr,
         check_local_ci,
@@ -667,6 +668,7 @@ def check(verbose: bool) -> None:
     branch_name = context.get("branch_name", "")
     default_branch = context.get("default_branch", "main")
     dco_required = context.get("dco_required", False)
+    cla_required = context.get("cla_required", False)
     ci_commands = context.get("ci_commands", [])
 
     # 3. Gather current git state
@@ -711,6 +713,7 @@ def check(verbose: bool) -> None:
     results: list = []
 
     results.append(check_staged_files_clean(staged_files))
+    results.append(check_cla_signed(cla_required))
 
     if staged_files or commit_msg:
         results.append(check_dco_signoff(commit_msg, dco_required))

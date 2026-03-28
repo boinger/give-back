@@ -114,6 +114,30 @@ def check_dco_signoff(
     )
 
 
+def check_cla_signed(cla_required: bool) -> GuardrailResult:
+    """Remind the user to sign the CLA if the project requires one.
+
+    We can't verify CLA status programmatically (it's managed by external
+    services), so this is a WARN reminder, not a BLOCK.
+    """
+    if not cla_required:
+        return GuardrailResult(
+            name="cla_signed",
+            severity=Severity.INFO,
+            passed=True,
+            message="Project does not require a CLA.",
+        )
+
+    return GuardrailResult(
+        name="cla_signed",
+        severity=Severity.WARN,
+        passed=False,
+        message="This project requires a Contributor License Agreement (CLA). "
+        "Make sure you've signed it before submitting your PR, or the CLA bot "
+        "will block your review. Check the project's CONTRIBUTING.md or PR template for the signing link.",
+    )
+
+
 def check_unrelated_changes(staged_files: list[str], expected_paths: list[str] | None = None) -> GuardrailResult:
     """Warn if staged files include paths obviously unrelated to the fix.
 

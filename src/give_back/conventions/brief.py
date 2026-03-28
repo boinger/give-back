@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 from give_back.conventions.branches import analyze_branch_names
+from give_back.conventions.cla import detect_cla
 from give_back.conventions.clone import cloned_repo
 from give_back.conventions.commits import analyze_commits
 from give_back.conventions.dco import detect_dco
@@ -75,6 +76,9 @@ def _fetch_review_info(client: GitHubClient, owner: str, repo: str) -> ReviewInf
 def _generate_notes(brief: ContributionBrief) -> list[str]:
     """Generate advisory notes based on scan findings."""
     notes: list[str] = []
+
+    if brief.cla_required:
+        notes.append("CLA (Contributor License Agreement) required — sign before your PR can be reviewed")
 
     if brief.dco_required:
         notes.append("DCO sign-off required (use `git commit -s`)")
@@ -170,6 +174,12 @@ def scan_conventions(
                 brief.dco_required = detect_dco(clone_dir)
             except Exception:
                 _log.debug("DCO detection failed")
+
+            # CLA
+            try:
+                brief.cla_required = detect_cla(clone_dir, client=client, owner=owner, repo=repo)
+            except Exception:
+                _log.debug("CLA detection failed")
 
             # Testing
             try:

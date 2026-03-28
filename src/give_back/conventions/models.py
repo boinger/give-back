@@ -97,6 +97,7 @@ class ContributionBrief:
 
     style_info: StyleInfo = field(default_factory=StyleInfo)
     dco_required: bool = False
+    cla_required: bool = False
     review_info: ReviewInfo = field(default_factory=ReviewInfo)
     notes: list[str] = field(default_factory=list)
 
