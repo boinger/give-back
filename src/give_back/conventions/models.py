@@ -41,7 +41,7 @@ class BranchConvention:
 
 
 @dataclass
-class TestInfo:
+class CITestInfo:
     """Detected test framework and CI configuration."""
 
     framework: str | None = None
@@ -91,7 +91,7 @@ class ContributionBrief:
     commit_format: CommitFormat = field(default_factory=lambda: CommitFormat(style="unknown"))
     pr_template: PrTemplate | None = None
     branch_convention: BranchConvention = field(default_factory=lambda: BranchConvention(pattern="unknown"))
-    test_info: TestInfo = field(default_factory=TestInfo)
+    test_info: CITestInfo = field(default_factory=CITestInfo)
     merge_strategy: str = "unknown"
     """'squash' / 'merge' / 'rebase' / 'mixed' / 'unknown'"""
 

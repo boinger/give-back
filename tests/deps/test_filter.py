@@ -2,7 +2,11 @@
 
 from unittest.mock import MagicMock
 
+import httpx
+import pytest
+
 from give_back.deps.filter import filter_candidates
+from give_back.exceptions import GiveBackError
 
 
 class TestFiltersUnresolved:
@@ -170,12 +174,32 @@ class TestMegaProjectFlaggedNotRemoved:
         assert stats["archived"] == 1
         assert len(filtered) == 0
 
-    def test_client_error_keeps_candidate(self):
-        """If the API call fails, the candidate is kept."""
+    def test_client_giveback_error_keeps_candidate(self):
+        """If the API call raises GiveBackError, the candidate is kept."""
         mock_client = MagicMock()
-        mock_client.rest_get.side_effect = Exception("network error")
+        mock_client.rest_get.side_effect = GiveBackError("API error")
         candidates = [
             ("some-lib", "someone/some-lib"),
         ]
         filtered, stats = filter_candidates(candidates, "myorg", [], client=mock_client)
         assert len(filtered) == 1
+
+    def test_client_httpx_error_keeps_candidate(self):
+        """If the API call raises httpx.HTTPError, the candidate is kept."""
+        mock_client = MagicMock()
+        mock_client.rest_get.side_effect = httpx.ConnectError("connection refused")
+        candidates = [
+            ("some-lib", "someone/some-lib"),
+        ]
+        filtered, stats = filter_candidates(candidates, "myorg", [], client=mock_client)
+        assert len(filtered) == 1
+
+    def test_unexpected_error_propagates(self):
+        """Unexpected exceptions are not swallowed by the narrowed handler."""
+        mock_client = MagicMock()
+        mock_client.rest_get.side_effect = RuntimeError("unexpected")
+        candidates = [
+            ("some-lib", "someone/some-lib"),
+        ]
+        with pytest.raises(RuntimeError, match="unexpected"):
+            filter_candidates(candidates, "myorg", [], client=mock_client)

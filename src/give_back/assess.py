@@ -1,20 +1,22 @@
 """Reusable viability assessment logic.
 
-Extracted from cli.py so both the `assess` CLI command and the dependency
-walker can call the same assessment pipeline.
+Fetches data, evaluates signals, computes tier, and returns an Assessment.
+Used by both the `assess` CLI command and the dependency walker.
 """
 
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime, timezone
 
 from rich.console import Console
 
-from give_back.exceptions import GiveBackError, RepoNotFoundError
+from give_back.exceptions import GiveBackError, RateLimitError, RepoNotFoundError
 from give_back.github_client import GitHubClient
+from give_back.graphql.queries import VIABILITY_QUERY
 from give_back.license_eval import LicenseEvaluation, evaluate_license_text
-from give_back.models import Assessment, SignalResult, Tier
+from give_back.models import Assessment, RepoData, SignalResult, Tier
 from give_back.reconcile import reconcile_merge_rate, should_reconcile
 from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
@@ -23,6 +25,92 @@ _console = Console(stderr=True)
 
 # License file names to try, in order of preference
 _LICENSE_FILENAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
+
+
+def _needs_ai_search(contributing_text: str | None) -> bool:
+    """Check if the AI policy signal needs the search API (CONTRIBUTING.md is silent on AI)."""
+    if not contributing_text:
+        return True
+
+    text_lower = contributing_text.lower()
+    # If CONTRIBUTING.md has explicit AI policy (ban, welcome, or disclosure), no search needed
+    ban_keywords = [
+        "no ai",
+        "no llm",
+        "no copilot",
+        "no chatgpt",
+        "ai-generated code is not accepted",
+        "machine-generated",
+    ]
+    welcome_keywords = ["ai-assisted welcome", "copilot encouraged", "ai contributions accepted"]
+    disclosure_keywords = ["disclose", "label ai", "ai-assisted must be noted"]
+
+    for kw in ban_keywords + welcome_keywords + disclosure_keywords:
+        if kw in text_lower:
+            return False
+
+    return True
+
+
+def _fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool) -> RepoData:
+    """Fetch all data needed for signal evaluation (4 API calls)."""
+    if verbose:
+        _console.print(f"  [dim]Fetching GraphQL data for {owner}/{repo}...[/dim]")
+
+    # 1. GraphQL: repo metadata + PRs
+    graphql_data = client.graphql(VIABILITY_QUERY, {"owner": owner, "repo": repo})
+
+    if verbose:
+        remaining = client._rate_remaining
+        _console.print(f"  [dim]Rate limit remaining: {remaining}[/dim]")
+
+    # 2. REST: community profile
+    if verbose:
+        _console.print("  [dim]Fetching community profile...[/dim]")
+
+    try:
+        community = client.rest_get(f"/repos/{owner}/{repo}/community/profile")
+    except RepoNotFoundError:
+        community = {}
+
+    # 3. REST: CONTRIBUTING.md text (only if community profile found one)
+    contributing_text = None
+    contributing_info = community.get("files", {}).get("contributing") if community else None
+    if contributing_info and contributing_info.get("url"):
+        if verbose:
+            _console.print("  [dim]Fetching CONTRIBUTING.md content...[/dim]")
+        try:
+            # The community profile gives us the HTML URL; we need the API URL.
+            # Extract the path from html_url: https://github.com/owner/repo/blob/main/.github/CONTRIBUTING.md
+            html_url = contributing_info.get("html_url", "")
+            # Parse path after /blob/branch/
+            path_match = re.search(r"/blob/[^/]+/(.+)$", html_url)
+            if path_match:
+                file_path = path_match.group(1)
+                contents = client.rest_get(f"/repos/{owner}/{repo}/contents/{file_path}")
+                if contents.get("encoding") == "base64" and contents.get("content"):
+                    contributing_text = base64.b64decode(contents["content"]).decode("utf-8", errors="replace")
+        except (RepoNotFoundError, GiveBackError, KeyError):
+            pass  # Fall through with contributing_text = None
+
+    # 4. REST: search for AI policy keywords (only if CONTRIBUTING.md doesn't have explicit policy)
+    search = {}
+    if _needs_ai_search(contributing_text):
+        if verbose:
+            _console.print("  [dim]Searching for AI policy discussions...[/dim]")
+        try:
+            search = client.search(f'repo:{owner}/{repo} "AI" OR "LLM" OR "copilot" OR "ChatGPT" OR "generated code"')
+        except (RateLimitError, GiveBackError):
+            search = {}
+
+    return RepoData(
+        owner=owner,
+        repo=repo,
+        graphql=graphql_data,
+        community=community,
+        contributing_text=contributing_text,
+        search=search,
+    )
 
 
 def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = False) -> Assessment:
@@ -36,8 +124,6 @@ def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = 
         RateLimitError: If the rate limit is exceeded.
         GiveBackError: On other API errors.
     """
-    from give_back.cli import _fetch_repo_data
-
     data = _fetch_repo_data(client, owner, repo, verbose)
 
     # Evaluate signals

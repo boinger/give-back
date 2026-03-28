@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from give_back.conventions.models import (
+    CITestInfo,
     CommitFormat,
     ContributionBrief,
-    TestInfo,
 )
 from give_back.prepare.action_plan import generate_action_plan
 
@@ -21,7 +21,7 @@ def _make_brief(**overrides) -> ContributionBrief:
         "issue_title": "Typo in quickstart docs",
         "commit_format": CommitFormat(style="conventional", examples=[]),
         "merge_strategy": "squash",
-        "test_info": TestInfo(framework="pytest", run_command="pytest"),
+        "test_info": CITestInfo(framework="pytest", run_command="pytest"),
         "default_branch": "main",
     }
     defaults.update(overrides)

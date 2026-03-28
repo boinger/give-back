@@ -1,7 +1,9 @@
 """Named exception hierarchy for give-back.
 
-All custom exceptions inherit from GiveBackError. No catch-all `except Exception`
-anywhere — each handler names the specific exception it catches.
+All custom exceptions inherit from GiveBackError. Handlers at system boundaries
+(CLI commands, API calls) name the specific exception they catch. Detector and
+signal isolation uses broad catches with debug logging to prevent one failure
+from crashing the pipeline (e.g., conventions/brief.py, assess.py signal eval).
 """
 
 

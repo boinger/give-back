@@ -10,11 +10,11 @@ import pytest
 from give_back.conventions.brief import scan_conventions
 from give_back.conventions.models import (
     BranchConvention,
+    CITestInfo,
     CommitFormat,
     ContributionBrief,
     PrTemplate,
     StyleInfo,
-    TestInfo,
 )
 from give_back.github_client import GitHubClient
 
@@ -59,7 +59,7 @@ def _patch_detectors():
             raw_content="## Description\n\n## Checklist\n",
         )
         mock_dco.return_value = True
-        mock_test.return_value = TestInfo(
+        mock_test.return_value = CITestInfo(
             framework="pytest",
             test_dir="tests/",
             ci_config="GitHub Actions",

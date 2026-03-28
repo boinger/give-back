@@ -10,10 +10,13 @@ from give_back.exceptions import StateCorruptError
 from give_back.models import Assessment, SignalResult, Tier
 from give_back.state import (
     _empty_state,
+    _parse_config_yaml,
     add_to_skip_list,
     get_cached_assessment,
     get_skip_list,
+    load_config,
     load_state,
+    reconstruct_assessment,
     remove_from_skip_list,
     save_assessment,
     save_state,
@@ -163,3 +166,87 @@ class TestSkipList:
         # add_to_skip_list handles StateCorruptError by recreating state
         add_to_skip_list("encode/httpx")
         assert "encode/httpx" in get_skip_list()
+
+
+class TestParseConfigYaml:
+    def test_valid_config(self):
+        content = 'workspace_dir: ~/my-workspaces\nhandoff:\n  command: "code ."'
+        config = _parse_config_yaml(content)
+        assert config.workspace_dir == "~/my-workspaces"
+        assert config.handoff_command == "code ."
+
+    def test_comments_and_blank_lines(self):
+        content = "# A comment\n\nworkspace_dir: ~/ws\n\n# another comment\n"
+        config = _parse_config_yaml(content)
+        assert config.workspace_dir == "~/ws"
+        assert config.handoff_command is None
+
+    def test_empty_content(self):
+        config = _parse_config_yaml("")
+        assert config.workspace_dir == "~/give-back-workspaces"
+        assert config.handoff_command is None
+
+    def test_only_handoff(self):
+        content = 'handoff:\n  command: "cursor ."'
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "cursor ."
+
+    def test_inline_handoff_value(self):
+        content = 'handoff: "code ."'
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "code ."
+
+
+class TestLoadConfig:
+    def test_missing_file_returns_defaults(self, state_dir):
+        config = load_config()
+        assert config.workspace_dir == "~/give-back-workspaces"
+        assert config.handoff_command is None
+
+    def test_valid_file(self, state_dir):
+        tmp, _ = state_dir
+        config_file = tmp / "config.yaml"
+        config_file.write_text('workspace_dir: ~/ws\nhandoff:\n  command: "code ."')
+        with patch("give_back.state.CONFIG_FILE", config_file):
+            config = load_config()
+        assert config.workspace_dir == "~/ws"
+        assert config.handoff_command == "code ."
+
+
+class TestReconstructAssessment:
+    def test_round_trip(self, state_dir):
+        """Save an assessment, retrieve cached, reconstruct, and compare."""
+        now = datetime.now(timezone.utc).isoformat()
+        original = Assessment(
+            owner="pallets",
+            repo="flask",
+            overall_tier=Tier.GREEN,
+            signals=[
+                SignalResult(score=1.0, tier=Tier.GREEN, summary="MIT License"),
+                SignalResult(score=0.8, tier=Tier.GREEN, summary="82% merge rate"),
+            ],
+            gate_passed=True,
+            incomplete=False,
+            timestamp=now,
+        )
+        save_assessment(original)
+        cached = get_cached_assessment("pallets", "flask")
+        assert cached is not None
+
+        rebuilt = reconstruct_assessment(cached, "pallets", "flask")
+        assert rebuilt.overall_tier == original.overall_tier
+        assert rebuilt.gate_passed == original.gate_passed
+        assert rebuilt.incomplete == original.incomplete
+        assert len(rebuilt.signals) == len(original.signals)
+        assert rebuilt.signals[0].score == original.signals[0].score
+        assert rebuilt.signals[0].tier == original.signals[0].tier
+
+    def test_invalid_tier_raises(self):
+        cached = {"overall_tier": "invalid", "signals": []}
+        with pytest.raises(ValueError):
+            reconstruct_assessment(cached, "a", "b")
+
+    def test_missing_tier_raises(self):
+        cached = {"signals": []}
+        with pytest.raises(ValueError):
+            reconstruct_assessment(cached, "a", "b")

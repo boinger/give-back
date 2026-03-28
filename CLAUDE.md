@@ -13,10 +13,11 @@ give-back evaluates open-source repos for contribution viability using GitHub AP
 
 ```
 CLI (cli.py)
-  ├── assess ──► auth → github_client → signals → scoring → output
+  ├── assess ──► cache check → (hit: display cached) or (miss: auth → assess.py → output)
+  │     ├── assess.py ──► _fetch_repo_data (4 API calls) → signals → scoring
   │     ├── signals/ (9 pure functions, each returns SignalResult)
   │     ├── scoring.py ──► signal results ──► Tier (GREEN/YELLOW/RED)
-  │     └── state.py ──► ~/.give-back/state.json (assessment cache)
+  │     └── state.py ──► ~/.give-back/state.json (assessment cache + reconstruct)
   ├── triage ──► fetch issues → check competition → rank → output
   │     ├── triage/fetch.py ──► REST issues API → filter + score
   │     ├── triage/compete.py ──► search for linked PRs + claim comments
@@ -29,8 +30,9 @@ CLI (cli.py)
   └── output.py ──► rich (tables + summaries + JSON)
 ```
 
-**Phase 1 (assess):** 4 API calls populate RepoData → 9 signals evaluate independently →
-scoring computes weighted tier → output formats for terminal or JSON.
+**Phase 1 (assess):** Cache check first. On hit: reconstruct Assessment from cached JSON,
+display, skip API calls. On miss: 4 API calls populate RepoData → 9 signals evaluate
+independently → scoring computes weighted tier → cache result → output for terminal or JSON.
 
 **Phase 2 (triage + sniff):** Fetch open issues → filter by labels/activity/clarity →
 check for competing PRs and claim comments → rank by friendliness. Sniff inspects

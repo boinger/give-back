@@ -17,6 +17,7 @@ _ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 _MODEL = "claude-haiku-4-5-20251001"
 _MAX_LICENSE_CHARS = 4000
 
+
 _SYSTEM_PROMPT = (
     "You are a software license classifier. Analyze the given license text and respond "
     "with a JSON object containing: classification (one of: Permissive, Copyleft, "
@@ -25,9 +26,6 @@ _SYSTEM_PROMPT = (
     "source contribution), confidence (high/medium/low), details (2-3 sentence "
     "explanation). Respond ONLY with the JSON object, no other text."
 )
-
-# License file names to try, in order of preference
-_LICENSE_FILENAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
 
 
 @dataclass

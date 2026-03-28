@@ -6,7 +6,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from give_back.conventions.models import TestInfo
+from give_back.conventions.models import CITestInfo
 
 
 def _detect_framework(clone_dir: Path) -> str | None:
@@ -155,7 +155,7 @@ def _infer_run_command(framework: str | None, has_makefile_test: bool) -> str | 
     return None
 
 
-def detect_testing(clone_dir: Path) -> TestInfo:
+def detect_testing(clone_dir: Path) -> CITestInfo:
     """Detect test framework, test directory, CI config, and run command.
 
     Inspects the cloned repo at *clone_dir* for test configuration files,
@@ -167,7 +167,7 @@ def detect_testing(clone_dir: Path) -> TestInfo:
     has_makefile_test = _makefile_has_test_target(clone_dir)
     run_command = _infer_run_command(framework, has_makefile_test)
 
-    return TestInfo(
+    return CITestInfo(
         framework=framework,
         test_dir=test_dir,
         ci_config=ci_config,

@@ -147,10 +147,7 @@ class GitHubClient:
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                if url.startswith("https://"):
-                    response = self._client.request(method, url, **kwargs)
-                else:
-                    response = self._client.request(method, url, **kwargs)
+                response = self._client.request(method, url, **kwargs)
 
                 self._update_rate_limit(response)
                 self._handle_error_status(response)

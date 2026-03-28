@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 
 from give_back.conventions.models import (
+    CITestInfo,
     CommitFormat,
     ContributionBrief,
     PrTemplate,
     StyleInfo,
-    TestInfo,
 )
 from give_back.prepare.brief_writer import write_brief
 
@@ -27,7 +27,7 @@ def _make_brief(**overrides) -> ContributionBrief:
             examples=["fix: correct typo in docs", "feat: add new endpoint", "chore: update deps"],
         ),
         "merge_strategy": "squash",
-        "test_info": TestInfo(framework="pytest", run_command="pytest"),
+        "test_info": CITestInfo(framework="pytest", run_command="pytest"),
         "style_info": StyleInfo(linter="ruff", config_file="pyproject.toml"),
         "default_branch": "main",
         "dco_required": False,

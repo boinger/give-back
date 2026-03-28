@@ -13,6 +13,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import httpx
+
+from give_back.exceptions import GiveBackError
+
 if TYPE_CHECKING:
     from give_back.github_client import GitHubClient
 
@@ -171,7 +175,7 @@ def filter_candidates(
                 if stars > _MEGA_STAR_THRESHOLD:
                     stats["mega_projects"].append(slug)
                     # Flagged but NOT removed
-            except Exception:  # noqa: BLE001 — network errors should not crash filtering
+            except (GiveBackError, httpx.HTTPError, ValueError, KeyError):
                 logger.debug("Failed to fetch repo info for %s, keeping candidate", slug)
 
         final.append((pkg, slug))

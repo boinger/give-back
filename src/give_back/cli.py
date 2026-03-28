@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import re
 import sys
 
@@ -22,8 +21,6 @@ from give_back.exceptions import (
     WorkspaceError,
 )
 from give_back.github_client import GitHubClient
-from give_back.graphql.queries import VIABILITY_QUERY
-from give_back.models import RepoData
 from give_back.output import (
     print_assessment,
     print_assessment_json,
@@ -66,92 +63,6 @@ def _parse_repo(repo: str) -> tuple[str, str]:
     )
 
 
-def _fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool) -> RepoData:
-    """Fetch all data needed for signal evaluation (4 API calls)."""
-    if verbose:
-        _console.print(f"  [dim]Fetching GraphQL data for {owner}/{repo}...[/dim]")
-
-    # 1. GraphQL: repo metadata + PRs
-    graphql_data = client.graphql(VIABILITY_QUERY, {"owner": owner, "repo": repo})
-
-    if verbose:
-        remaining = client._rate_remaining
-        _console.print(f"  [dim]Rate limit remaining: {remaining}[/dim]")
-
-    # 2. REST: community profile
-    if verbose:
-        _console.print("  [dim]Fetching community profile...[/dim]")
-
-    try:
-        community = client.rest_get(f"/repos/{owner}/{repo}/community/profile")
-    except RepoNotFoundError:
-        community = {}
-
-    # 3. REST: CONTRIBUTING.md text (only if community profile found one)
-    contributing_text = None
-    contributing_info = community.get("files", {}).get("contributing") if community else None
-    if contributing_info and contributing_info.get("url"):
-        if verbose:
-            _console.print("  [dim]Fetching CONTRIBUTING.md content...[/dim]")
-        try:
-            # The community profile gives us the HTML URL; we need the API URL.
-            # Extract the path from html_url: https://github.com/owner/repo/blob/main/.github/CONTRIBUTING.md
-            html_url = contributing_info.get("html_url", "")
-            # Parse path after /blob/branch/
-            path_match = re.search(r"/blob/[^/]+/(.+)$", html_url)
-            if path_match:
-                file_path = path_match.group(1)
-                contents = client.rest_get(f"/repos/{owner}/{repo}/contents/{file_path}")
-                if contents.get("encoding") == "base64" and contents.get("content"):
-                    contributing_text = base64.b64decode(contents["content"]).decode("utf-8", errors="replace")
-        except (RepoNotFoundError, GiveBackError, KeyError):
-            pass  # Fall through with contributing_text = None
-
-    # 4. REST: search for AI policy keywords (only if CONTRIBUTING.md doesn't have explicit policy)
-    search = {}
-    if _needs_ai_search(contributing_text):
-        if verbose:
-            _console.print("  [dim]Searching for AI policy discussions...[/dim]")
-        try:
-            search = client.search(f'repo:{owner}/{repo} "AI" OR "LLM" OR "copilot" OR "ChatGPT" OR "generated code"')
-        except (RateLimitError, GiveBackError):
-            search = {}
-
-    return RepoData(
-        owner=owner,
-        repo=repo,
-        graphql=graphql_data,
-        community=community,
-        contributing_text=contributing_text,
-        search=search,
-    )
-
-
-def _needs_ai_search(contributing_text: str | None) -> bool:
-    """Check if the AI policy signal needs the search API (CONTRIBUTING.md is silent on AI)."""
-    if not contributing_text:
-        return True
-
-    text_lower = contributing_text.lower()
-    # If CONTRIBUTING.md has explicit AI policy (ban, welcome, or disclosure), no search needed
-    ban_keywords = [
-        "no ai",
-        "no llm",
-        "no copilot",
-        "no chatgpt",
-        "ai-generated code is not accepted",
-        "machine-generated",
-    ]
-    welcome_keywords = ["ai-assisted welcome", "copilot encouraged", "ai contributions accepted"]
-    disclosure_keywords = ["disclose", "label ai", "ai-assisted must be noted"]
-
-    for kw in ban_keywords + welcome_keywords + disclosure_keywords:
-        if kw in text_lower:
-            return False
-
-    return True
-
-
 @click.group()
 @click.version_option(version=__version__, prog_name="give-back")
 def cli() -> None:
@@ -183,12 +94,34 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
     if not no_cache:
         cached = get_cached_assessment(owner, repo_name)
         if cached is not None:
+            from give_back.state import reconstruct_assessment
+
+            print_cached_notice(owner, repo_name, cached.get("timestamp", "unknown"))
             if verbose:
-                print_cached_notice(owner, repo_name, cached.get("timestamp", "unknown"))
                 _console.print("  [dim]Cache hit — use --no-cache to force fresh API calls[/dim]")
-            # For now, just note the cache hit and proceed with fresh data
-            # Full cache display would reconstruct the Assessment from cached data
-            # TODO: reconstruct and display cached assessment without API calls
+
+            try:
+                assessment = reconstruct_assessment(cached, owner, repo_name)
+            except ValueError:
+                _console.print("  [dim]Cache data invalid, fetching fresh...[/dim]")
+            else:
+                signal_names = [s.name for s in ALL_SIGNALS]
+                signal_weights = [s.weight for s in ALL_SIGNALS]
+
+                if json_output:
+                    print_assessment_json(assessment, signal_names)
+                else:
+                    print_assessment(assessment, signal_names, signal_weights, verbose=verbose)
+
+                if not deps:
+                    if not assessment.gate_passed:
+                        sys.exit(1)
+                    if assessment.incomplete:
+                        sys.exit(2)
+                    return
+
+                # Fall through to deps handling below with fresh client
+                # (deps always needs API calls)
 
     # Resolve auth
     token = resolve_token()
@@ -684,7 +617,7 @@ def prepare(
         if verbose:
             _console.print(f"  [dim]Running handoff: {config.handoff_command}[/dim]")
         try:
-            subprocess.run(config.handoff_command, shell=True, cwd=workspace_path)  # noqa: S602
+            subprocess.run(["sh", "-c", config.handoff_command], cwd=workspace_path)
         except OSError as exc:
             _console.print(
                 f"[yellow]Warning:[/yellow] Handoff command failed: {exc}. Workspace ready at {workspace_path}."

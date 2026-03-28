@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from give_back.exceptions import StateCorruptError
-from give_back.models import Assessment, Config
+from give_back.models import Assessment, Config, SignalResult, Tier
 
 STATE_DIR = Path.home() / ".give-back"
 STATE_FILE = STATE_DIR / "state.json"
@@ -120,6 +120,41 @@ def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_C
     return entry
 
 
+def reconstruct_assessment(cached: dict, owner: str, repo: str) -> Assessment:
+    """Rebuild an Assessment from the cached JSON format.
+
+    Raises ValueError if the cached data is missing required fields.
+    """
+    try:
+        tier = Tier(cached["overall_tier"])
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"Invalid cached tier: {exc}") from exc
+
+    signals = []
+    for s in cached.get("signals", []):
+        try:
+            signal_tier = Tier(s["tier"])
+        except (KeyError, ValueError):
+            signal_tier = Tier.RED
+        signals.append(
+            SignalResult(
+                score=float(s.get("score", 0.0)),
+                tier=signal_tier,
+                summary=s.get("summary", ""),
+            )
+        )
+
+    return Assessment(
+        owner=owner,
+        repo=repo,
+        overall_tier=tier,
+        signals=signals,
+        gate_passed=cached.get("gate_passed", True),
+        incomplete=cached.get("incomplete", False),
+        timestamp=cached.get("timestamp", ""),
+    )
+
+
 def add_to_skip_list(slug: str) -> None:
     """Add an owner/repo slug to the skip list (deduplicated, case-preserved)."""
     try:
@@ -178,10 +213,10 @@ def load_config() -> Config:
     try:
         content = CONFIG_FILE.read_text()
         return _parse_config_yaml(content)
-    except Exception:
+    except (ValueError, OSError) as exc:
         import sys
 
-        print("Warning: Config file invalid, using defaults.", file=sys.stderr)
+        print(f"Warning: Config file {CONFIG_FILE} invalid ({exc}), using defaults.", file=sys.stderr)
         return Config()
 
 
