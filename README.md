@@ -97,6 +97,18 @@ give-back check
 
 # Inspect code quality for a specific issue
 give-back sniff pallets/flask 5432
+
+# Discover repos to contribute to (not yet implemented)
+give-back discover --language python
+give-back discover --topic kubernetes --min-stars 100
+
+# Submit a PR from your workspace (not yet implemented)
+cd ~/give-back-workspaces/pallets/flask
+give-back submit
+give-back submit --title "Fix type annotation" --draft
+
+# Check status of your contributions (not yet implemented)
+give-back status
 ```
 
 ## Authentication

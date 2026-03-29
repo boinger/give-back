@@ -812,3 +812,147 @@ def check(verbose: bool) -> None:
 
     # 6. Print results
     print_check_results(results, upstream_owner, repo_name, issue_number, verbose=verbose)
+
+
+# --- Discover ---
+
+
+@cli.command()
+@click.option("--language", "-l", default=None, help="Filter by primary language (e.g., 'python', 'rust').")
+@click.option("--topic", "-t", default=None, help="Filter by topic (e.g., 'kubernetes', 'cli').")
+@click.option("--min-stars", default=50, help="Minimum star count.")
+@click.option("--limit", default=20, help="Maximum results to return.")
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
+@click.option("--verbose", "-v", is_flag=True, help="Show viability pre-screen details.")
+def discover(
+    language: str | None, topic: str | None, min_stars: int, limit: int, json_output: bool, verbose: bool
+) -> None:
+    """Find open-source repos worth contributing to.
+
+    Searches GitHub for repos with good-first-issue labels, recent activity,
+    and viable contribution signals. Pre-screens each result for viability.
+
+    Examples:
+
+        give-back discover --language python
+
+        give-back discover --topic kubernetes --min-stars 100
+    """
+    from give_back.discover.search import discover_repos
+
+    if not language and not topic:
+        _console.print("[red]Error:[/red] Provide at least --language or --topic to search.")
+        sys.exit(1)
+
+    token = resolve_token()
+
+    try:
+        with GitHubClient(token=token) as client:
+            result = discover_repos(
+                client,
+                language=language,
+                topic=topic,
+                min_stars=min_stars,
+                limit=limit,
+            )
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except NotImplementedError:
+        _console.print("[yellow]discover is not yet implemented.[/yellow]")
+        sys.exit(1)
+
+    _console.print(f"  Found {len(result.results)} repos matching your criteria.")
+
+
+# --- Submit ---
+
+
+@cli.command()
+@click.option("--title", default=None, help="PR title (auto-generated from issue if omitted).")
+@click.option("--draft", is_flag=True, help="Create as draft PR.")
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
+@click.option("--verbose", "-v", is_flag=True, help="Show submission details.")
+def submit(title: str | None, draft: bool, json_output: bool, verbose: bool) -> None:
+    """Create a pull request from the current workspace.
+
+    Must be run from inside a give-back workspace (created by `prepare`).
+    Reads the contribution brief to apply correct conventions: commit format,
+    DCO sign-off, and PR template sections.
+
+    Examples:
+
+        cd ~/give-back-workspaces/pallets/flask
+        give-back submit
+
+        give-back submit --title "Fix type annotation in request handler" --draft
+    """
+    from pathlib import Path
+
+    from give_back.submit import submit_pr
+
+    cwd = Path.cwd()
+    context_file = cwd / ".give-back" / "context.json"
+
+    if not context_file.exists():
+        _console.print(
+            "[red]Error:[/red] Not in a give-back workspace. Run from a directory created by `give-back prepare`."
+        )
+        sys.exit(1)
+
+    try:
+        result = submit_pr(cwd, title=title, draft=draft)
+    except NotImplementedError:
+        _console.print("[yellow]submit is not yet implemented.[/yellow]")
+        sys.exit(1)
+
+    if result.success:
+        _console.print(f"  [green]PR created:[/green] {result.pr_url}")
+    else:
+        _console.print(f"  [red]Error:[/red] {result.error}")
+        sys.exit(1)
+
+
+# --- Status ---
+
+
+@cli.command()
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
+@click.option("--verbose", "-v", is_flag=True, help="Show review details.")
+def status(json_output: bool, verbose: bool) -> None:
+    """Check the status of your open contributions across repos.
+
+    Scans your give-back workspaces and checks GitHub for PR status
+    (open, reviewed, merged, closed).
+
+    Examples:
+
+        give-back status
+
+        give-back status --verbose
+    """
+    from give_back.status import check_contributions
+
+    token = resolve_token()
+
+    try:
+        with GitHubClient(token=token) as client:
+            results = check_contributions(client)
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except NotImplementedError:
+        _console.print("[yellow]status is not yet implemented.[/yellow]")
+        sys.exit(1)
+
+    if not results:
+        _console.print("  No tracked contributions found.")
+        return
+
+    _console.print(f"  {len(results)} tracked contribution(s).")
