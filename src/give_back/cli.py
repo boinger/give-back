@@ -819,11 +819,24 @@ def check(verbose: bool) -> None:
 @click.option("--language", "-l", default=None, help="Filter by primary language (e.g., 'python', 'rust').")
 @click.option("--topic", "-t", default=None, help="Filter by topic (e.g., 'kubernetes', 'cli').")
 @click.option("--min-stars", default=50, help="Minimum star count.")
-@click.option("--limit", default=20, help="Maximum results to return.")
+@click.option("--limit", default=10, help="Total repos to display (cached + freshly assessed).")
+@click.option("--batch-size", default=5, help="Repos to assess per batch.")
+@click.option("--interactive", "interactive", is_flag=True, help="Prompt to assess more after each batch.")
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
+@click.option("--no-cache", is_flag=True, help="Skip all caches.")
+@click.option("--exclude-assessed", is_flag=True, help="Filter out repos already in assessment cache.")
 @click.option("--verbose", "-v", is_flag=True, help="Show viability pre-screen details.")
 def discover(
-    language: str | None, topic: str | None, min_stars: int, limit: int, json_output: bool, verbose: bool
+    language: str | None,
+    topic: str | None,
+    min_stars: int,
+    limit: int,
+    batch_size: int,
+    interactive: bool,
+    json_output: bool,
+    no_cache: bool,
+    exclude_assessed: bool,
+    verbose: bool,
 ) -> None:
     """Find open-source repos worth contributing to.
 
@@ -835,8 +848,11 @@ def discover(
         give-back discover --language python
 
         give-back discover --topic kubernetes --min-stars 100
+
+        give-back discover --language rust --limit 5 --interactive
     """
     from give_back.discover.search import discover_repos
+    from give_back.output import print_discover, print_discover_json
 
     if not language and not topic:
         _console.print("[red]Error:[/red] Provide at least --language or --topic to search.")
@@ -846,24 +862,57 @@ def discover(
 
     try:
         with GitHubClient(token=token) as client:
-            result = discover_repos(
+            summary = discover_repos(
                 client,
                 language=language,
                 topic=topic,
                 min_stars=min_stars,
                 limit=limit,
+                batch_size=batch_size,
+                no_cache=no_cache,
+                exclude_assessed=exclude_assessed,
             )
+
+            if json_output:
+                print_discover_json(summary)
+            else:
+                print_discover(summary, verbose=verbose)
+
+                # Interactive loop
+                if interactive and not json_output and sys.stdin.isatty():
+                    # Check if there are more repos to assess beyond current limit
+                    remaining = summary.total_searched - len(summary.results)
+                    while remaining > 0:
+                        try:
+                            if not click.confirm("  Assess next batch?", default=True):
+                                break
+                        except (EOFError, KeyboardInterrupt):
+                            _console.print()
+                            break
+
+                        summary = discover_repos(
+                            client,
+                            language=language,
+                            topic=topic,
+                            min_stars=min_stars,
+                            limit=limit + batch_size,
+                            batch_size=batch_size,
+                            no_cache=False,
+                            exclude_assessed=exclude_assessed,
+                        )
+                        print_discover(summary, verbose=verbose)
+                        remaining = summary.total_searched - len(summary.results)
+                        limit += batch_size
+
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
     except RateLimitError as exc:
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-    except NotImplementedError:
-        _console.print("[yellow]discover is not yet implemented.[/yellow]")
+    except GiveBackError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
-
-    _console.print(f"  Found {len(result.results)} repos matching your criteria.")
 
 
 # --- Submit ---

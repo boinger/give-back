@@ -114,17 +114,18 @@ Manage the skip list for dependency walking results.
 
 Run scoring threshold calibration against repos with known expected tiers.
 
-### discover (stub, not yet implemented)
+### discover
 
 Search GitHub for repos worth contributing to. Filters by language, topic,
 and star count. Pre-screens candidates for viability using the assess pipeline.
 
 - `--language python` or `--topic kubernetes` (at least one required)
 - `--min-stars 50` minimum star count
-- `--limit 10` total repos to assess
+- `--limit 10` total repos to display
 - `--batch-size 5` repos assessed per batch
 - `--interactive` for exploratory "assess more?" loop
 - `--exclude-assessed` to skip repos already in cache
+- `--no-cache` to skip all caches
 
 ### submit (stub, not yet implemented)
 

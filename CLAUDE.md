@@ -25,8 +25,9 @@ CLI (cli.py)
   ├── sniff ──► identify files → fetch content → heuristic assessment
   │     ├── sniff/files.py ──► extract file paths from issue body
   │     └── sniff/assess.py ──► file size, tests, churn, nesting → verdict
-  ├── discover ──► search GitHub → pre-screen viability → rank (stub)
-  │     └── discover/search.py ──► GitHub search API → lightweight assess
+  ├── discover ──► search GitHub → rank → batch-assess → display
+  │     ├── discover/search.py ──► GitHub search API → assess pipeline
+  │     └── discover/rank.py ──► light ranking by search metadata
   ├── submit ──► read brief → push branch → create PR via gh (stub)
   │     └── submit.py ──► context.json + brief → gh pr create
   ├── status ──► scan workspaces → check PR state → report (stub)
@@ -75,7 +76,7 @@ make run ARGS='prepare pallets/flask --issue 5432'  # fork + clone + branch + br
 make run ARGS='check'                     # run pre-flight guardrails in workspace
 make run ARGS='skip google/protobuf'      # add to skip list
 make run ARGS='unskip google/protobuf'    # remove from skip list
-make run ARGS='discover --language python' # find repos to contribute to (stub)
+make run ARGS='discover --language python' # find repos to contribute to
 make run ARGS='submit'                    # create PR from workspace (stub)
 make run ARGS='status'                    # check contribution status (stub)
 ```
@@ -95,6 +96,7 @@ make run ARGS='status'                    # check contribution status (stub)
 | `src/give_back/triage/rank.py` | Candidate ranking |
 | `src/give_back/sniff/files.py` | File path extraction + content fetch |
 | `src/give_back/sniff/assess.py` | Heuristic code quality assessment |
-| `src/give_back/discover/search.py` | Repo discovery via GitHub search (stub) |
+| `src/give_back/discover/search.py` | Repo discovery via GitHub search |
+| `src/give_back/discover/rank.py` | Light ranking by search metadata |
 | `src/give_back/submit.py` | PR creation from workspace context (stub) |
 | `src/give_back/status.py` | Contribution tracking across repos (stub) |

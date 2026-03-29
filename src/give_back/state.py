@@ -207,6 +207,45 @@ def get_skip_list() -> list[str]:
     return state.get("skip_list", [])
 
 
+def save_discover_cache(query_hash: str, query: str, repos: list[dict]) -> None:
+    """Save search results to discover cache, keyed by query hash."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        state = _empty_state()
+
+    cache = state.setdefault("discover_cache", {})
+    cache[query_hash] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "query": query,
+        "repos": repos,
+    }
+    save_state(state)
+
+
+def get_discover_cache(query_hash: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS) -> dict | None:
+    """Return cached search results if fresh, else None."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        return None
+
+    entry = state.get("discover_cache", {}).get(query_hash)
+    if entry is None:
+        return None
+
+    cached_time = entry.get("timestamp", "")
+    try:
+        cached_dt = datetime.fromisoformat(cached_time)
+        age = datetime.now(timezone.utc) - cached_dt
+        if age.total_seconds() > max_age_hours * 3600:
+            return None
+    except (ValueError, TypeError):
+        return None
+
+    return entry
+
+
 def _backup_corrupt_state() -> None:
     """Back up a corrupt state file before recreating."""
     if STATE_FILE.exists():

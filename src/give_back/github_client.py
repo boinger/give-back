@@ -121,6 +121,24 @@ class GitHubClient:
         self._update_search_rate_limit(response)
         return response.json()
 
+    def search_repos(self, query: str, per_page: int = 30, sort: str = "stars") -> dict:
+        """Search the repositories endpoint. Returns parsed JSON.
+
+        Uses the separate search rate limit tracking (30 req/min).
+        """
+        self._check_search_rate_limit()
+        response = self._request_with_retry(
+            "GET", "/search/repositories", params={"q": query, "per_page": per_page, "sort": sort}
+        )
+        self._update_search_rate_limit(response)
+        return response.json()
+
+    def has_rate_budget(self, calls: int) -> bool:
+        """Check if enough core API budget remains for *calls* requests."""
+        if self._rate_remaining is None:
+            return True  # Unknown budget, optimistic
+        return self._rate_remaining >= calls
+
     def check_rate_limit(self) -> dict:
         """Return current rate limit status from the API."""
         response = self._client.get("/rate_limit")

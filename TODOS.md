@@ -1,16 +1,5 @@
 # TODOs
 
-## Implement `discover` command
-
-CLI and models are stubbed in `discover/search.py`. Needs:
-- Build GitHub search query from language/topic/min-stars filters
-- Fetch repos via search API with pagination
-- Filter: must have open issues, must not be archived, pushed within 90 days
-- Pre-screen: run lightweight viability check (license gate + activity signals)
-- Rank by: good-first-issue count, recent activity, viability tier
-- Output: table (rich) and JSON modes
-- Tests in `tests/discover/`
-
 ## Reduce reconciliation overcount with date-based heuristic
 
 `reconcile.py:_check_author_transition` counts all merged PRs from a
