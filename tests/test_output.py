@@ -21,7 +21,6 @@ from give_back.deps.walker import DepResult, WalkResult
 from give_back.guardrails import GuardrailResult, Severity
 from give_back.models import Assessment, SignalResult, SignalWeight, Tier
 from give_back.output import (
-    _build_summary,
     _extract_signal_detail,
     print_assessment,
     print_assessment_json,
@@ -36,6 +35,7 @@ from give_back.output import (
     print_triage,
     print_triage_json,
 )
+from give_back.output.assess import _build_summary
 from give_back.sniff.models import FileAssessment, SniffResult
 from give_back.triage.models import Clarity, Competition, IssueCandidate, Scope
 
@@ -438,15 +438,25 @@ def _capture(func, *args, **kwargs) -> str:
     Returns plain text with ANSI codes stripped so assertions don't break on
     rich markup splitting tokens like ``#99`` into ``#\\x1b[1;36m99``.
     """
-    import give_back.output as mod
+    import give_back.output._shared as shared
+    import give_back.output.assess as assess_mod
+    import give_back.output.check as check_mod
+    import give_back.output.conventions as conv_mod
+    import give_back.output.deps as deps_mod
+    import give_back.output.sniff as sniff_mod
+    import give_back.output.triage as triage_mod
 
     buf = StringIO()
-    original = mod._console
-    mod._console = Console(file=buf, width=120, force_terminal=True)
+    test_console = Console(file=buf, width=120, force_terminal=True)
+    modules = [shared, assess_mod, check_mod, conv_mod, deps_mod, sniff_mod, triage_mod]
+    originals = [m._console for m in modules]
+    for m in modules:
+        m._console = test_console
     try:
         func(*args, **kwargs)
     finally:
-        mod._console = original
+        for m, orig in zip(modules, originals):
+            m._console = orig
     return _strip_ansi(buf.getvalue())
 
 
