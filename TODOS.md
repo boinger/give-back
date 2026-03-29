@@ -1,21 +1,5 @@
 # TODOs
 
-## Reduce reconciliation overcount with date-based heuristic
-
-`reconcile.py:_check_author_transition` counts all merged PRs from a
-collaborator author as "reclassified external." This overcounts because it
-includes PRs created after the author was promoted to collaborator.
-
-Fix: use PR `created_at` dates from search results to estimate the transition
-point. The author's earliest PR approximates when they started contributing.
-PRs created within the last N months (e.g., 6) are likely post-promotion and
-should not be reclassified. Only count PRs older than the estimated transition
-window. Still a heuristic (GitHub doesn't expose historical association), but
-significantly more accurate than counting everything.
-
-Affected files: `src/give_back/reconcile.py` (`_check_author_transition`),
-`tests/test_reconcile.py`.
-
 ## Implement `submit` command
 
 CLI and models are stubbed in `submit.py`. Needs:

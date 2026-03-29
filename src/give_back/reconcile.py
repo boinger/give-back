@@ -20,6 +20,8 @@ This only triggers when the data looks suspicious, minimizing extra API calls.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 from give_back.models import SignalResult, SignalWeight, Tier, score_to_tier
@@ -29,6 +31,9 @@ _SUSPICION_THRESHOLD = 0.4
 
 # Max collaborator authors to investigate (each costs 1 API call)
 _MAX_AUTHORS_TO_INVESTIGATE = 5
+
+# PRs created more recently than this are assumed post-promotion
+_TRANSITION_RECENCY_CUTOFF = timedelta(days=180)
 
 # Internal association values (from GitHub API)
 _INTERNAL_ASSOCIATIONS = {"MEMBER", "OWNER", "COLLABORATOR"}
@@ -124,9 +129,8 @@ def reconcile_merge_rate(
     original_external_merged = original_result.details.get("external_merged", 0)
     original_external_closed = original_result.details.get("external_closed", 0)
 
-    # Add reclassified PRs to external counts
-    # NOTE: This overcounts — all merged PRs from transitioned authors are added,
-    # including post-promotion PRs. See TODOS.md for a more precise heuristic.
+    # Add reclassified PRs to external counts. Only PRs older than the
+    # recency cutoff are counted (see _check_author_transition).
     adjusted_merged = original_external_merged + transitioned_pr_count
     adjusted_closed = original_external_closed + transitioned_pr_count
 
@@ -180,31 +184,44 @@ def _check_author_transition(
     repo: str,
     author: str,
 ) -> int:
-    """Check if an author has older PRs with external association.
+    """Check if an author has older PRs suggesting they were once external.
 
-    Returns the count of PRs where the author was external (CONTRIBUTOR,
-    FIRST_TIME_CONTRIBUTOR) before becoming a COLLABORATOR.
+    Uses a date-based heuristic: finds the author's earliest merged PR, then
+    only counts merged PRs from the "early period" (older than 6 months ago).
+    PRs created recently are likely post-promotion and excluded.
+
+    GitHub's authorAssociation reflects the current role, not the role at PR
+    time, so there is no API way to know exactly when someone was promoted.
+    This heuristic reduces overcounting compared to counting all merged PRs.
     """
     try:
-        # Search for this author's closed PRs in the repo
         results = client.search(f"repo:{owner}/{repo} is:pr is:closed author:{author}")
         items = results.get("items", [])
 
-        external_count = 0
-        for item in items[:10]:  # Check up to 10 PRs
-            # The search API doesn't return authorAssociation directly,
-            # but we can check if the PR was merged (merged PRs from
-            # external contributors who were later promoted are the bias case)
-            if item.get("pull_request", {}).get("merged_at"):
-                external_count += 1
+        # Collect merged PRs with their creation dates
+        merged_prs: list[datetime] = []
+        for item in items[:10]:
+            if not item.get("pull_request", {}).get("merged_at"):
+                continue
+            created_at = item.get("created_at")
+            if not created_at or not isinstance(created_at, str):
+                continue
+            try:
+                created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                merged_prs.append(created)
+            except (ValueError, TypeError):
+                continue
 
-        # KNOWN OVERCOUNT: This counts ALL merged PRs from the author, including
-        # PRs created after they became a collaborator. GitHub's authorAssociation
-        # reflects the current role, not the role at PR time, so there's no API
-        # way to distinguish pre-promotion from post-promotion PRs. This inflates
-        # the adjusted score. See TODOS.md for a date-based heuristic that would
-        # reduce the overcount by filtering on PR creation dates.
-        return external_count
+        if not merged_prs:
+            return 0
+
+        # Only count PRs older than the recency cutoff. Recent PRs are likely
+        # post-promotion and should not be reclassified as external.
+        cutoff = datetime.now(timezone.utc) - _TRANSITION_RECENCY_CUTOFF
+        early_count = sum(1 for d in merged_prs if d < cutoff)
+
+        # If all their PRs are recent, no evidence of a transition
+        return early_count
 
     except GiveBackError:
         return 0
