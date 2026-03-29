@@ -44,17 +44,39 @@ If NO_AUTH, tell the user: "give-back needs GitHub authentication. Run
 The user may invoke this skill in several ways:
 
 - `/give-back <owner/repo>` — full guided workflow for a specific repo
-- `/give-back` — ask which repo to evaluate
+- `/give-back` — ask which repo to evaluate, or discover one
 - Natural language: "I want to contribute to grafana/alloy", "find good
-  first issues in dozzle", "is this repo contribution-friendly?"
+  first issues in dozzle", "is this repo contribution-friendly?",
+  "find me a Python project to contribute to"
 
 Parse the repo argument. Accept `owner/repo` or full GitHub URLs.
+
+**If the user doesn't have a specific repo**, ask: "What language or topic
+are you interested in?" Then use `discover` (Step 0) to find repos.
 
 ## Workflow
 
 Run the steps below in order. After each step, interpret the output for the
 user and offer the next step. Stop early if the results indicate the user
 should not proceed (RED tier, no issues, etc.).
+
+### Step 0: Discover repos (when no repo specified)
+
+Only run this if the user doesn't have a specific repo in mind:
+
+```bash
+give-back discover --language <language> --limit 5
+```
+
+Add `--topic <topic>` if the user mentioned a specific area (e.g., "web",
+"cli", "kubernetes"). Use `--min-stars 100` for beginners to ensure
+well-maintained repos.
+
+Present the results as recommendations: "Here are 5 repos that accept outside
+contributions." Highlight the ones with GREEN tier and suggest the user pick
+one. Once they choose, proceed to Step 1 with that repo.
+
+If no results, try broader filters or suggest the user name a repo directly.
 
 ### Step 1: Assess viability
 
@@ -106,7 +128,7 @@ target for a first contribution right now.
 Only run this if the user picks a specific issue:
 
 ```bash
-give-back sniff <owner/repo> <issue_number>
+give-back sniff <owner/repo> <issue_number> --verbose
 ```
 
 Interpret the verdict:
