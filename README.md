@@ -108,8 +108,10 @@ cd ~/give-back-workspaces/pallets/flask
 give-back submit
 give-back submit --title "Fix type annotation" --draft
 
-# Check status of your contributions (not yet implemented)
+# Check status of your contributions
 give-back status
+give-back status --verbose    # include archived contributions
+give-back status --dir ~/alt  # scan alternate workspace root
 ```
 
 ## Authentication

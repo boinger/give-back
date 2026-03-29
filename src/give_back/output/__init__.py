@@ -12,6 +12,7 @@ from give_back.output.conventions import print_conventions, print_conventions_js
 from give_back.output.deps import print_deps, print_deps_json
 from give_back.output.discover import print_discover, print_discover_json
 from give_back.output.sniff import print_sniff, print_sniff_json
+from give_back.output.status import print_status, print_status_json
 from give_back.output.triage import print_triage, print_triage_json
 
 __all__ = [
@@ -31,6 +32,8 @@ __all__ = [
     "print_prepare_json",
     "print_sniff",
     "print_sniff_json",
+    "print_status",
+    "print_status_json",
     "print_triage",
     "print_triage_json",
 ]

@@ -13,12 +13,3 @@ CLI and models are stubbed in `submit.py`. Needs:
 - Output: PR URL (rich) and JSON modes
 - Tests in `tests/test_submit.py`
 
-## Implement `status` command
-
-CLI and models are stubbed in `status.py`. Needs:
-- Scan `~/.give-back/state.json` for workspace entries with PR URLs
-- Also scan workspace directories for `.give-back/context.json` files
-- For each tracked contribution: query GitHub API for PR state + review state
-- Detect: open, reviewed (approved/changes_requested), merged, closed
-- Output: summary table (rich) and JSON modes
-- Tests in `tests/test_status.py`

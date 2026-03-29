@@ -132,10 +132,15 @@ and star count. Pre-screens candidates for viability using the assess pipeline.
 Create a pull request from a give-back workspace. Reads the contribution brief
 to apply correct conventions (commit format, DCO, PR template).
 
-### status (stub, not yet implemented)
+### status
 
-Check the status of your open contributions across repos. Shows PR state
-(open, reviewed, merged, closed) for all tracked workspaces.
+Check the status of your open contributions across repos. Scans workspace
+directories, refreshes PR state and review status from the GitHub API,
+and displays a summary table.
+
+- `--verbose` to include archived contributions from workspace reuse
+- `--dir <path>` to scan an alternate workspace root
+- Works without auth (shows local state only, marked "(local)")
 
 ## Recommended workflow
 
