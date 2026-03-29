@@ -120,9 +120,10 @@ for a single assessment (4 API calls).
 
 ## Exit Codes
 
-- `0` — Assessment completed successfully
+- `0` — Assessment completed successfully (GREEN or YELLOW)
 - `1` — Fatal error (network failure, auth failure, repo not found)
 - `2` — Partial assessment (some signals failed, tier may be capped)
+- `3` — Gate failed (RED tier, e.g. no OSS license)
 
 ## Claude Code Skill
 

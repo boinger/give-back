@@ -114,7 +114,7 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
 
                 if not deps:
                     if not assessment.gate_passed:
-                        sys.exit(1)
+                        sys.exit(3)
                     if assessment.incomplete:
                         sys.exit(2)
                     return
@@ -187,9 +187,9 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
         _console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
-    # Exit codes: 0 = success, 1 = gate fail, 2 = incomplete (HIGH/GATE signal errored)
+    # Exit codes: 0 = success, 1 = fatal error, 2 = incomplete, 3 = gate fail (RED)
     if not assessment.gate_passed:
-        sys.exit(1)
+        sys.exit(3)
     if assessment.incomplete:
         sys.exit(2)
 

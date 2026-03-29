@@ -56,7 +56,7 @@ Signals evaluated:
 8. Issue label hygiene (LOW): "good first issue", "help wanted" labels
 9. Staleness (MEDIUM): recent commits, releases, issue resolution
 
-Exit codes: 0 = success, 1 = gate fail, 2 = incomplete (signal errors).
+Exit codes: 0 = success, 1 = fatal error, 2 = incomplete, 3 = gate fail (RED).
 
 ### triage <repo>
 
