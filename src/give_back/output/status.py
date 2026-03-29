@@ -79,6 +79,11 @@ def print_status(
             table.add_row(repo_text, issue_text, branch_text, pr_text, status_text, review_text)
 
         _console.print(table)
+
+        # Explain stale entries if multiple hit rate limit
+        stale_count = sum(1 for c in contributions if c.stale)
+        if stale_count > 1:
+            _console.print(f"  [yellow]{stale_count} contributions could not be refreshed (rate limit low)[/yellow]")
         _console.print()
 
     if archived:
