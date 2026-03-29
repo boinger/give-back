@@ -58,6 +58,13 @@ def print_audit(report: AuditReport, verbose: bool = False) -> None:
         _console.print()
 
     _console.print(f"  Score: {passing}/{total} checks passing")
+
+    # Suggest --conventions if not already included and basic checks look good
+    has_conventions = any(item.category == "conventions" for item in report.items)
+    if not has_conventions and passing > total * 0.6:
+        _console.print(
+            "  [dim]Run with --conventions to also check commit format, code style, and CI setup.[/dim]"
+        )
     _console.print()
 
 
