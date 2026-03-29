@@ -28,10 +28,25 @@ _CLA_PATTERNS = [
     re.compile(r"sign\s+the\s+cla", re.IGNORECASE),
 ]
 
+_CLA_NEGATIONS = [
+    re.compile(r"no\s+cla\b", re.IGNORECASE),
+    re.compile(r"no\s+contributor\s+license", re.IGNORECASE),
+    re.compile(r"cla.{0,20}not\s+required", re.IGNORECASE),
+    re.compile(r"don.t.{0,20}require.{0,20}cla", re.IGNORECASE),
+]
+
 _DCO_PATTERNS = [
     re.compile(r"\bdco\b", re.IGNORECASE),
     re.compile(r"signed-off-by", re.IGNORECASE),
     re.compile(r"developer\s+certificate", re.IGNORECASE),
+]
+
+_DCO_NEGATIONS = [
+    re.compile(r"no\s+dco\b", re.IGNORECASE),
+    re.compile(r"no\s+sign-off", re.IGNORECASE),
+    re.compile(r"dco.{0,20}not\s+required", re.IGNORECASE),
+    re.compile(r"don.t.{0,20}require.{0,20}dco", re.IGNORECASE),
+    re.compile(r"sign-off.{0,20}not\s+required", re.IGNORECASE),
 ]
 
 _ONEROUS_PATTERNS = [
@@ -41,11 +56,11 @@ _ONEROUS_PATTERNS = [
     re.compile(r"waiting\s+period", re.IGNORECASE),
 ]
 
-# Each category: (patterns, score, label)
-_FRICTION_CATEGORIES: list[tuple[list[re.Pattern[str]], float, str]] = [
-    (_CLA_PATTERNS, 0.3, "CLA required"),
-    (_DCO_PATTERNS, 0.6, "DCO sign-off"),
-    (_ONEROUS_PATTERNS, 0.3, "onerous process"),
+# Each category: (patterns, negations, score, label)
+_FRICTION_CATEGORIES: list[tuple[list[re.Pattern[str]], list[re.Pattern[str]], float, str]] = [
+    (_CLA_PATTERNS, _CLA_NEGATIONS, 0.3, "CLA required"),
+    (_DCO_PATTERNS, _DCO_NEGATIONS, 0.6, "DCO sign-off"),
+    (_ONEROUS_PATTERNS, [], 0.3, "onerous process"),
 ]
 
 
@@ -83,8 +98,11 @@ def evaluate_contributing_content(data: RepoData) -> SignalResult:
     found: list[str] = []
     lowest_score = 1.0
 
-    for patterns, score, label in _FRICTION_CATEGORIES:
+    for patterns, negations, score, label in _FRICTION_CATEGORIES:
         if any(p.search(text) for p in patterns):
+            # Check if the text explicitly negates this requirement
+            if negations and any(n.search(text) for n in negations):
+                continue
             found.append(label)
             lowest_score = min(lowest_score, score)
 

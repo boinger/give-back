@@ -100,3 +100,24 @@ class TestContributingContent:
         data = _make_repo_data(contributing_text="you must sign the cla before contributing")
         result = evaluate_contributing_content(data)
         assert result.score == 0.3
+
+    def test_negated_cla(self):
+        """'No CLA' should not trigger friction."""
+        data = _make_repo_data(contributing_text="No CLA. No DCO. No sign-off required. Just clean code.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 1.0
+        assert "No friction" in result.summary
+
+    def test_negated_dco(self):
+        """'No DCO' alone should not trigger friction."""
+        data = _make_repo_data(contributing_text="We don't require DCO sign-off.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 1.0
+
+    def test_negated_cla_but_real_dco(self):
+        """'No CLA' negated but real DCO requirement still detected."""
+        data = _make_repo_data(contributing_text="No CLA required. All commits must include a Signed-off-by line.")
+        result = evaluate_contributing_content(data)
+        assert result.score == 0.6
+        assert "DCO" in result.summary
+        assert "CLA" not in result.summary
