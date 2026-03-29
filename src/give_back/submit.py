@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -174,7 +175,7 @@ def _open_editor(file_path: Path) -> None:
 
     try:
         result = subprocess.run(
-            [editor, str(file_path)],
+            shlex.split(editor) + [str(file_path)],
             timeout=600,
         )
     except FileNotFoundError as exc:

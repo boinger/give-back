@@ -13,6 +13,7 @@ from give_back.submit import (
     _build_pr_title,
     _check_gh_auth,
     _create_pr,
+    _open_editor,
     _push_branch,
     _read_context,
     _verify_branch,
@@ -327,3 +328,22 @@ class TestSubmitPr:
         result = submit_pr(tmp_path)
         assert not result.success
         assert "Missing context file" in (result.error or "")
+
+
+class TestOpenEditor:
+    @patch("give_back.submit.subprocess")
+    def test_editor_with_arguments_splits_correctly(self, mock_subprocess: MagicMock, tmp_path: Path) -> None:
+        """Editor commands like 'code --wait' must be split into ['code', '--wait']."""
+        mock_subprocess.run.side_effect = [
+            MagicMock(returncode=0, stdout="code --wait\n"),  # git var GIT_EDITOR
+            MagicMock(returncode=0),  # editor invocation
+        ]
+        mock_subprocess.TimeoutExpired = TimeoutError
+        target = tmp_path / "body.md"
+        target.write_text("test")
+
+        _open_editor(target)
+
+        # Second call should have split the editor command
+        editor_call = mock_subprocess.run.call_args_list[1]
+        assert editor_call[0][0] == ["code", "--wait", str(target)]
