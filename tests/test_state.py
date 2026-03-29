@@ -234,17 +234,38 @@ class TestReconstructAssessment:
             incomplete=False,
             timestamp=now,
         )
-        save_assessment(original)
+        save_assessment(original, signal_names=["License", "PR Merge Rate"])
         cached = get_cached_assessment("pallets", "flask")
         assert cached is not None
 
-        rebuilt = reconstruct_assessment(cached, "pallets", "flask")
+        rebuilt, names = reconstruct_assessment(cached, "pallets", "flask")
         assert rebuilt.overall_tier == original.overall_tier
         assert rebuilt.gate_passed == original.gate_passed
         assert rebuilt.incomplete == original.incomplete
         assert len(rebuilt.signals) == len(original.signals)
         assert rebuilt.signals[0].score == original.signals[0].score
         assert rebuilt.signals[0].tier == original.signals[0].tier
+        assert names == ["License", "PR Merge Rate"]
+
+    def test_reconstruct_without_names_returns_empty(self, state_dir):
+        """Old caches without signal names still reconstruct with empty name strings."""
+        now = datetime.now(timezone.utc).isoformat()
+        original = Assessment(
+            owner="pallets",
+            repo="flask",
+            overall_tier=Tier.GREEN,
+            signals=[SignalResult(score=0.9, tier=Tier.GREEN, summary="OK")],
+            gate_passed=True,
+            incomplete=False,
+            timestamp=now,
+        )
+        # Save without names (simulates old cache format)
+        save_assessment(original)
+        cached = get_cached_assessment("pallets", "flask")
+        assert cached is not None
+
+        _, names = reconstruct_assessment(cached, "pallets", "flask")
+        assert names == [""]
 
     def test_invalid_tier_raises(self):
         cached = {"overall_tier": "invalid", "signals": []}

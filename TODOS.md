@@ -1,51 +1,11 @@
 # TODOs
 
-## ~~Phase 1b: Dependency Walking~~ DONE
+## output.py size
 
-Implemented: `give-back deps`, `--deps` flag on `assess`, `skip`/`unskip` commands.
-Supports go.mod, pyproject.toml (PEP 621 + Poetry), requirements.txt.
-Resolves via PyPI API and Go module paths. Filters stdlib, same-org, archived,
-skip list, mega-projects.
+`output.py` is 764 LOC with 25 functions handling all terminal formatting for
+every command. It has tests now (56 in `test_output.py`) but is the largest
+file after `cli.py`. High churn (10 changes in 90 days).
 
-## ~~Phase 1.1: authorAssociation Bias Reconciliation~~ DONE
-
-Implemented in reconcile.py. Conditional two-phase assessment: if PR merge rate
-is suspiciously low but other signals are healthy, investigates collaborator role
-transitions via search API. Re-scores if transitions found. Max 5 author lookups.
-
-## ~~Scoring Threshold Auto-Calibration~~ DONE
-
-Implemented: `give-back calibrate repos.yaml`. Accepts YAML/JSON with expected
-tiers, runs assessments, outputs confusion matrix + accuracy + threshold suggestions.
-
-## ~~LLM-Assisted License Evaluation~~ DONE
-
-Implemented in license_eval.py. When license gate returns REVIEW and ANTHROPIC_API_KEY
-is set, fetches LICENSE file and asks Claude Haiku to classify it. Purely additive —
-falls back to manual review link when no API key is available.
-
-## Future work
-
-- ~~**Phase 3: Convention Scan**~~ DONE — `give-back conventions` clones, analyzes
-  commit format, merge strategy, PR templates, branch naming, DCO, tests, style.
-- ~~**Phase 4: Prepare Workspace**~~ DONE — `give-back prepare` forks, clones, branches,
-  writes brief + context.json, runs configurable handoff. `give-back check` runs
-  pre-flight guardrails in the workspace.
-- ~~**CLA detection**~~ DONE — detects CLA requirements via config files
-  (.clabot, cla.json, CLA.md), CI workflow patterns (CLA Assistant, EasyCLA),
-  and PR comment scanning for known CLA bot logins. Surfaces in convention
-  brief notes and warns in `give-back check`.
-- ~~**Ghost-closing bot awareness**~~ DONE — PRs with only bot comments/reviews
-  (CLA bots, CI bots, stale bots) now correctly count as ghost-closed. Bot
-  detection shared between ghost_closing and time_to_response via _bots.py.
-- ~~**Go module resolution**~~ DONE — resolves non-GitHub Go module hosts
-  (gopkg.in, k8s.io, sigs.k8s.io, go.uber.org, etc.) via go-import HTML meta
-  tags. Caches results per session. Skips "mod" proxy entries, only extracts
-  git VCS pointing to GitHub.
-- ~~**Rust/Node/Ruby dep-walking**~~ DONE — Cargo.toml (crates.io), package.json
-  (npm registry), Gemfile (RubyGems) parsing and resolution. Resolvers hit
-  crates.io, registry.npmjs.org, rubygems.org APIs for GitHub URL extraction.
-  Node.js builtins filtered. Walker detects all six manifest types.
-- ~~**PR pagination**~~ DONE — cursor-based GraphQL pagination for PRs, 50 per
-  page, stops at the 12-month boundary or 500 PRs max. Metadata query separated
-  from PR query to enable independent pagination.
+Consider splitting into `output/` package by command group (assess, triage,
+sniff, conventions, deps) if the file keeps growing. Not urgent — the current
+flat structure works fine and the functions are well-namespaced by prefix.

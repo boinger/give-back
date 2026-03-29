@@ -26,6 +26,7 @@ from give_back.deps.resolver import resolve_packages
 from give_back.exceptions import GiveBackError, RepoNotFoundError
 from give_back.github_client import GitHubClient
 from give_back.models import Assessment
+from give_back.signals import ALL_SIGNALS
 from give_back.state import get_cached_assessment, get_skip_list, save_assessment
 
 logger = logging.getLogger(__name__)
@@ -161,7 +162,7 @@ def walk_deps(
 
                 # Cache the result
                 try:
-                    save_assessment(assessment)
+                    save_assessment(assessment, signal_names=[s.name for s in ALL_SIGNALS])
                 except (PermissionError, GiveBackError):
                     pass
 

@@ -19,6 +19,23 @@ STATE_DIR = Path.home() / ".give-back"
 STATE_FILE = STATE_DIR / "state.json"
 CONFIG_FILE = STATE_DIR / "config.yaml"
 
+
+def atomic_write_text(path: Path, content: str) -> None:
+    """Write *content* to *path* atomically via temp-file-then-rename.
+
+    The temp file is created in the same directory as *path* so the rename
+    is guaranteed atomic on POSIX. Parent directories must already exist.
+    """
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with open(fd, "w") as f:
+            f.write(content)
+        Path(tmp_path).replace(path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
+
+
 _SCHEMA_VERSION = 1
 _DEFAULT_CACHE_TTL_HOURS = 24
 
@@ -51,27 +68,22 @@ def save_state(state: dict) -> None:
     Silently creates ~/.give-back/ if it doesn't exist.
     """
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Write to temp file in the same directory (same filesystem for atomic rename)
-    fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp", prefix="state-")
-    try:
-        with open(fd, "w") as f:
-            json.dump(state, f, indent=2)
-        # Atomic rename
-        Path(tmp_path).replace(STATE_FILE)
-    except BaseException:
-        # Clean up temp file on any failure
-        Path(tmp_path).unlink(missing_ok=True)
-        raise
+    atomic_write_text(STATE_FILE, json.dumps(state, indent=2))
 
 
-def save_assessment(assessment: Assessment) -> None:
-    """Save an assessment result to state, keyed by owner/repo."""
+def save_assessment(assessment: Assessment, signal_names: list[str] | None = None) -> None:
+    """Save an assessment result to state, keyed by owner/repo.
+
+    *signal_names* should match the order of ``assessment.signals``. When
+    provided, each signal is stored with its name for stable reconstruction
+    regardless of registry order changes.
+    """
     try:
         state = load_state()
     except StateCorruptError:
         state = _empty_state()
 
+    names = signal_names or [""] * len(assessment.signals)
     key = f"{assessment.owner}/{assessment.repo}"
     state["assessments"][key] = {
         "timestamp": assessment.timestamp,
@@ -80,11 +92,12 @@ def save_assessment(assessment: Assessment) -> None:
         "incomplete": assessment.incomplete,
         "signals": [
             {
+                "name": name,
                 "tier": s.tier.value,
                 "score": s.score,
                 "summary": s.summary,
             }
-            for s in assessment.signals
+            for name, s in zip(names, assessment.signals)
         ],
     }
 
@@ -116,8 +129,12 @@ def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_C
     return entry
 
 
-def reconstruct_assessment(cached: dict, owner: str, repo: str) -> Assessment:
-    """Rebuild an Assessment from the cached JSON format.
+def reconstruct_assessment(cached: dict, owner: str, repo: str) -> tuple[Assessment, list[str]]:
+    """Rebuild an Assessment and signal names from the cached JSON format.
+
+    Returns ``(assessment, signal_names)`` where *signal_names* are the names
+    stored at cache time. If the cache predates named signals, names will be
+    empty strings.
 
     Raises ValueError if the cached data is missing required fields.
     """
@@ -127,6 +144,7 @@ def reconstruct_assessment(cached: dict, owner: str, repo: str) -> Assessment:
         raise ValueError(f"Invalid cached tier: {exc}") from exc
 
     signals = []
+    signal_names: list[str] = []
     for s in cached.get("signals", []):
         try:
             signal_tier = Tier(s["tier"])
@@ -139,8 +157,9 @@ def reconstruct_assessment(cached: dict, owner: str, repo: str) -> Assessment:
                 summary=s.get("summary", ""),
             )
         )
+        signal_names.append(s.get("name", ""))
 
-    return Assessment(
+    assessment = Assessment(
         owner=owner,
         repo=repo,
         overall_tier=tier,
@@ -149,6 +168,7 @@ def reconstruct_assessment(cached: dict, owner: str, repo: str) -> Assessment:
         incomplete=cached.get("incomplete", False),
         timestamp=cached.get("timestamp", ""),
     )
+    return assessment, signal_names
 
 
 def add_to_skip_list(slug: str) -> None:

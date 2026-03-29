@@ -104,15 +104,17 @@ def _resolve_fork_name(fork_owner: str, upstream_owner: str, upstream_repo: str)
     if result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip()
 
-    # Repo was renamed. Search the user's forks for one whose parent matches.
+    # Repo was renamed. Search the fork owner's repos for one whose parent matches.
+    # This is better than paginating upstream's forks (could be thousands for popular repos).
     try:
         result = subprocess.run(
             [
                 "gh",
                 "api",
-                f"repos/{upstream_owner}/{upstream_repo}/forks",
+                f"users/{fork_owner}/repos",
+                "--paginate",
                 "-q",
-                f'.[] | select(.owner.login == "{fork_owner}") | .name',
+                f'.[] | select(.fork and .parent.full_name == "{upstream_owner}/{upstream_repo}") | .name',
             ],
             capture_output=True,
             text=True,

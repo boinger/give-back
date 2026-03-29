@@ -101,11 +101,12 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
                 _console.print("  [dim]Cache hit — use --no-cache to force fresh API calls[/dim]")
 
             try:
-                assessment = reconstruct_assessment(cached, owner, repo_name)
+                assessment, cached_names = reconstruct_assessment(cached, owner, repo_name)
             except ValueError:
                 _console.print("  [dim]Cache data invalid, fetching fresh...[/dim]")
             else:
-                signal_names = [s.name for s in ALL_SIGNALS]
+                # Use cached names if available, fall back to registry for old caches
+                signal_names = cached_names if any(cached_names) else [s.name for s in ALL_SIGNALS]
                 signal_weights = [s.weight for s in ALL_SIGNALS]
 
                 if json_output:
@@ -131,9 +132,12 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
         with GitHubClient(token=token) as client:
             assessment = run_assessment(client, owner, repo_name, verbose)
 
-            # Save to state
+            # Output
+            signal_names = [s.name for s in ALL_SIGNALS]
+
+            # Save to state (with signal names for stable reconstruction)
             try:
-                save_assessment(assessment)
+                save_assessment(assessment, signal_names=signal_names)
             except PermissionError:
                 _console.print("[yellow]Warning:[/yellow] Cannot write state file. Continuing without cache.")
             except StateCorruptError:
@@ -142,12 +146,9 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
 
                 try:
                     save_state(_empty_state())
-                    save_assessment(assessment)
+                    save_assessment(assessment, signal_names=signal_names)
                 except PermissionError:
                     pass
-
-            # Output
-            signal_names = [s.name for s in ALL_SIGNALS]
             signal_weights = [s.weight for s in ALL_SIGNALS]
 
             if json_output:

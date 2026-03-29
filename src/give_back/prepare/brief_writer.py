@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from give_back.conventions.models import ContributionBrief
+from give_back.state import atomic_write_text
 
 
 def write_brief(
@@ -29,15 +30,16 @@ def write_brief(
     give_back_dir.mkdir(parents=True, exist_ok=True)
 
     brief_path = give_back_dir / "brief.md"
-    brief_path.write_text(_render_brief_md(brief, issue_number, branch_name, upstream_owner))
+    atomic_write_text(brief_path, _render_brief_md(brief, issue_number, branch_name, upstream_owner))
 
     context_path = give_back_dir / "context.json"
-    context_path.write_text(
+    atomic_write_text(
+        context_path,
         json.dumps(
             _build_context(brief, issue_number, branch_name, upstream_owner, fork_owner, previous_issues),
             indent=2,
         )
-        + "\n"
+        + "\n",
     )
 
     _add_to_git_exclude(workspace_dir)
