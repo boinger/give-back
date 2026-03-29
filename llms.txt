@@ -2,9 +2,9 @@
 
 > Evaluate whether an open-source project is viable for outside contributions.
 
-give-back is a CLI tool that queries the GitHub API and scores repositories on
-contribution-friendliness. It produces a Green/Yellow/Red viability tier based
-on 9 weighted signals.
+give-back is a Python 3.11+ CLI tool that queries the GitHub API and scores
+repositories on contribution-friendliness. It produces a Green/Yellow/Red
+viability tier based on 9 weighted signals.
 
 ## Quick start
 
@@ -72,6 +72,8 @@ Inspect code quality for files referenced in a specific issue. Extracts file
 paths from the issue body, fetches content, and runs heuristics (file size,
 test coverage, churn, nesting depth).
 
+- `--verbose` for detailed file assessment data
+
 ### conventions <repo>
 
 Clone the repo and scan for contribution conventions: commit message format,
@@ -112,8 +114,31 @@ Manage the skip list for dependency walking results.
 
 Run scoring threshold calibration against repos with known expected tiers.
 
+### discover (stub, not yet implemented)
+
+Search GitHub for repos worth contributing to. Filters by language, topic,
+and star count. Pre-screens candidates for viability using the assess pipeline.
+
+- `--language python` or `--topic kubernetes` (at least one required)
+- `--min-stars 50` minimum star count
+- `--limit 10` total repos to assess
+- `--batch-size 5` repos assessed per batch
+- `--interactive` for exploratory "assess more?" loop
+- `--exclude-assessed` to skip repos already in cache
+
+### submit (stub, not yet implemented)
+
+Create a pull request from a give-back workspace. Reads the contribution brief
+to apply correct conventions (commit format, DCO, PR template).
+
+### status (stub, not yet implemented)
+
+Check the status of your open contributions across repos. Shows PR state
+(open, reviewed, merged, closed) for all tracked workspaces.
+
 ## Recommended workflow
 
+0. `give-back discover --language python` to find a repo (optional)
 1. `give-back assess owner/repo` to check viability
 2. `give-back triage owner/repo` to find a good issue
 3. `give-back sniff owner/repo <issue>` to check code quality
