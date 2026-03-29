@@ -3,6 +3,7 @@ name = "give-back"
 dynamic = ["version"]
 description = "Evaluate whether an open-source project is viable for outside contributions"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
