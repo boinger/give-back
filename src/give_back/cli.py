@@ -878,10 +878,10 @@ def discover(
             else:
                 print_discover(summary, verbose=verbose)
 
-                # Interactive loop
+                # Interactive loop — assess additional batches
                 if interactive and not json_output and sys.stdin.isatty():
-                    # Check if there are more repos to assess beyond current limit
-                    remaining = summary.total_searched - len(summary.results)
+                    shown_count = len(summary.results)
+                    remaining = summary.total_searched - shown_count
                     while remaining > 0:
                         try:
                             if not click.confirm("  Assess next batch?", default=True):
@@ -890,19 +890,35 @@ def discover(
                             _console.print()
                             break
 
-                        summary = discover_repos(
+                        new_limit = shown_count + batch_size
+                        new_summary = discover_repos(
                             client,
                             language=language,
                             topic=topic,
                             min_stars=min_stars,
-                            limit=limit + batch_size,
+                            limit=new_limit,
                             batch_size=batch_size,
                             no_cache=False,
                             exclude_assessed=exclude_assessed,
                         )
-                        print_discover(summary, verbose=verbose)
-                        remaining = summary.total_searched - len(summary.results)
-                        limit += batch_size
+                        # Only display the new repos (skip already-shown ones)
+                        from give_back.discover.search import DiscoverSummary
+
+                        new_only = DiscoverSummary(
+                            query=new_summary.query,
+                            total_searched=new_summary.total_searched,
+                            results=new_summary.results[shown_count:],
+                            assessed_count=new_summary.assessed_count - summary.assessed_count,
+                            cache_hits=new_summary.cache_hits - summary.cache_hits,
+                        )
+                        if new_only.results:
+                            print_discover(new_only, verbose=verbose)
+                        else:
+                            _console.print("  [dim]No more repos to assess.[/dim]")
+                            break
+                        shown_count = len(new_summary.results)
+                        remaining = new_summary.total_searched - shown_count
+                        summary = new_summary
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

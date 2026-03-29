@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-# Initial weights — expect tuning after real-world usage
-_GFI_WEIGHT = 3  # points per good-first-issue (capped at 30 total)
-_HELP_WANTED_WEIGHT = 1  # points per help-wanted-issue (capped at 10 total)
+# Initial weights — expect tuning after real-world usage.
+# GitHub search doesn't return per-label issue counts, so GFI/HW bonuses
+# are based on which search query the repo came from (tagged by discover_repos).
+_GFI_QUERY_BONUS = 15  # repo matched the good-first-issues search query
+_HW_QUERY_BONUS = 5  # repo matched the help-wanted search query
 _RECENT_PUSH_7D = 10  # pushed in last 7 days
 _RECENT_PUSH_30D = 5  # pushed in last 30 days
 _HAS_DESCRIPTION = 5  # repo has a non-empty description
 _ACTIVE_ISSUES = 5  # open_issues > 10
+_HAS_TOPICS = 3  # 3+ topics (indicates maintained repo)
 
 
 def rank_repos(repos: list[dict]) -> list[dict]:
@@ -44,9 +47,9 @@ def _score(repo: dict) -> int:
     # Repos from Q1 (good-first-issues) get a bonus if they were tagged by
     # the caller. This is set by discover_repos() after the search.
     if repo.get("_from_gfi_query"):
-        score += 15
+        score += _GFI_QUERY_BONUS
     elif repo.get("_from_hw_query"):
-        score += 5
+        score += _HW_QUERY_BONUS
 
     # Recent push
     pushed_at = repo.get("pushed_at")
@@ -73,6 +76,6 @@ def _score(repo: dict) -> int:
     # Has topics (indicates maintained, discoverable repo)
     topics = repo.get("topics", [])
     if isinstance(topics, list) and len(topics) >= 3:
-        score += 3
+        score += _HAS_TOPICS
 
     return score
