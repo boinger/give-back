@@ -48,3 +48,7 @@ class ForkError(GiveBackError):
 
 class WorkspaceError(GiveBackError):
     """Workspace setup failed — clone error, wrong remote, or dirty branch."""
+
+
+class SubmitError(GiveBackError):
+    """PR submission failed — push error, gh CLI issue, or missing context."""

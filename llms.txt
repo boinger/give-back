@@ -127,10 +127,16 @@ and star count. Pre-screens candidates for viability using the assess pipeline.
 - `--exclude-assessed` to skip repos already in cache
 - `--no-cache` to skip all caches
 
-### submit (stub, not yet implemented)
+### submit
 
-Create a pull request from a give-back workspace. Reads the contribution brief
-to apply correct conventions (commit format, DCO, PR template).
+Create a pull request from a give-back workspace. Reads context.json and
+brief.md to auto-generate PR title and body from conventions. Pushes the
+branch and creates the PR via gh CLI.
+
+- `--title "..."` to override auto-generated title
+- `--draft` to create as draft PR
+- `--edit` to open editor for PR body customization
+- Verifies branch, gh auth, and prevents duplicate PRs
 
 ### status
 

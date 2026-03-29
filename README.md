@@ -103,10 +103,11 @@ give-back discover --language python
 give-back discover --topic kubernetes --min-stars 100
 give-back discover --language rust --limit 5 --interactive
 
-# Submit a PR from your workspace (not yet implemented)
+# Submit a PR from your workspace
 cd ~/give-back-workspaces/pallets/flask
 give-back submit
 give-back submit --title "Fix type annotation" --draft
+give-back submit --edit  # open editor to customize PR body
 
 # Check status of your contributions
 give-back status

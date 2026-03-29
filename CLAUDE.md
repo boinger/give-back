@@ -28,8 +28,8 @@ CLI (cli.py)
   ├── discover ──► search GitHub → rank → batch-assess → display
   │     ├── discover/search.py ──► GitHub search API → assess pipeline
   │     └── discover/rank.py ──► light ranking by search metadata
-  ├── submit ──► read brief → push branch → create PR via gh (stub)
-  │     └── submit.py ──► context.json + brief → gh pr create
+  ├── submit ──► read brief → push branch → create PR via gh
+  │     └── submit.py ──► context.json + brief → git push → gh pr create
   ├── status ──► scan workspaces → refresh PR state → display
   │     └── status.py ──► context.json files + GitHub API → contribution list
   ├── prepare/lifecycle.py ──► workspace state machine (working → pr_open → merged)
@@ -77,7 +77,7 @@ make run ARGS='check'                     # run pre-flight guardrails in workspa
 make run ARGS='skip google/protobuf'      # add to skip list
 make run ARGS='unskip google/protobuf'    # remove from skip list
 make run ARGS='discover --language python' # find repos to contribute to
-make run ARGS='submit'                    # create PR from workspace (stub)
+make run ARGS='submit'                    # create PR from workspace
 make run ARGS='status'                    # check contribution status
 ```
 
@@ -98,5 +98,5 @@ make run ARGS='status'                    # check contribution status
 | `src/give_back/sniff/assess.py` | Heuristic code quality assessment |
 | `src/give_back/discover/search.py` | Repo discovery via GitHub search |
 | `src/give_back/discover/rank.py` | Light ranking by search metadata |
-| `src/give_back/submit.py` | PR creation from workspace context (stub) |
+| `src/give_back/submit.py` | PR creation from workspace context |
 | `src/give_back/status.py` | Contribution tracking across repos |

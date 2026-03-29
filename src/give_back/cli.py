@@ -937,9 +937,10 @@ def discover(
 @cli.command()
 @click.option("--title", default=None, help="PR title (auto-generated from issue if omitted).")
 @click.option("--draft", is_flag=True, help="Create as draft PR.")
+@click.option("--edit", is_flag=True, help="Open editor for the PR body before submitting.")
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
 @click.option("--verbose", "-v", is_flag=True, help="Show submission details.")
-def submit(title: str | None, draft: bool, json_output: bool, verbose: bool) -> None:
+def submit(title: str | None, draft: bool, edit: bool, json_output: bool, verbose: bool) -> None:
     """Create a pull request from the current workspace.
 
     Must be run from inside a give-back workspace (created by `prepare`).
@@ -955,6 +956,7 @@ def submit(title: str | None, draft: bool, json_output: bool, verbose: bool) -> 
     """
     from pathlib import Path
 
+    from give_back.output import print_submit_json, print_submit_success
     from give_back.submit import submit_pr
 
     cwd = Path.cwd()
@@ -966,16 +968,14 @@ def submit(title: str | None, draft: bool, json_output: bool, verbose: bool) -> 
         )
         sys.exit(1)
 
-    try:
-        result = submit_pr(cwd, title=title, draft=draft)
-    except NotImplementedError:
-        _console.print("[yellow]submit is not yet implemented.[/yellow]")
-        sys.exit(1)
+    result = submit_pr(cwd, title=title, draft=draft, edit=edit)
 
-    if result.success:
-        _console.print(f"  [green]PR created:[/green] {result.pr_url}")
+    if json_output:
+        print_submit_json(result)
     else:
-        _console.print(f"  [red]Error:[/red] {result.error}")
+        print_submit_success(result)
+
+    if not result.success:
         sys.exit(1)
 
 

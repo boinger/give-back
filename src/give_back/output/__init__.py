@@ -13,6 +13,7 @@ from give_back.output.deps import print_deps, print_deps_json
 from give_back.output.discover import print_discover, print_discover_json
 from give_back.output.sniff import print_sniff, print_sniff_json
 from give_back.output.status import print_status, print_status_json
+from give_back.output.submit import print_submit_json, print_submit_success
 from give_back.output.triage import print_triage, print_triage_json
 
 __all__ = [
@@ -34,6 +35,8 @@ __all__ = [
     "print_sniff_json",
     "print_status",
     "print_status_json",
+    "print_submit_json",
+    "print_submit_success",
     "print_triage",
     "print_triage_json",
 ]
