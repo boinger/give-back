@@ -27,6 +27,12 @@ def unauth_client():
     c.close()
 
 
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """Eliminate real time.sleep() calls in retry/rate-limit paths."""
+    monkeypatch.setattr("give_back.github_client.time.sleep", lambda _: None)
+
+
 class TestGraphQL:
     @respx.mock
     def test_successful_query(self, client):
