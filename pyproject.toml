@@ -36,6 +36,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
+exclude = ["src/give_back/_version.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
