@@ -1,6 +1,6 @@
 # give-back
 
-Evaluate whether an open-source project is viable for outside contributions.
+Evaluate whether an open-source project is viable for outside contributions...or if you're not sure where you could help, discover an open-source project in a certain language or on a particular topic (or both).  `give-back` can help you to discover, assess the project, fimd candidate issues to work on, help you structure the PR to the project's spec (and/or best practices), and even help you check on the status of your PR.  Basically, everything but the actual coding.
 
 Point give-back at a GitHub repo and it queries the API to assess:
 - External PR merge rate
