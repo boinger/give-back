@@ -65,14 +65,8 @@ def evaluate_ghost_closing(data: RepoData) -> SignalResult:
         comments = (pr.get("comments") or {}).get("nodes") or []
         reviews = (pr.get("reviews") or {}).get("nodes") or []
 
-        has_human_comment = any(
-            not is_bot((c.get("author") or {}).get("login"))
-            for c in comments
-        )
-        has_human_review = any(
-            not is_bot((r.get("author") or {}).get("login"))
-            for r in reviews
-        )
+        has_human_comment = any(not is_bot((c.get("author") or {}).get("login")) for c in comments)
+        has_human_review = any(not is_bot((r.get("author") or {}).get("login")) for r in reviews)
 
         if not has_human_comment and not has_human_review:
             ghost_closed += 1

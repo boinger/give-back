@@ -198,21 +198,27 @@ class TestGhostClosingBotAwareness:
         """PR with only a bot review (no human review) is ghost-closed."""
         prs = []
         for _ in range(12):
-            prs.append({
-                "state": "CLOSED",
-                "merged": False,
-                "mergedAt": None,
-                "closedAt": "2026-03-05T10:00:00Z",
-                "createdAt": "2026-03-01T10:00:00Z",
-                "author": {"login": "ext-dev"},
-                "authorAssociation": "CONTRIBUTOR",
-                "comments": {"nodes": []},
-                "reviews": {"nodes": [{
-                    "createdAt": "2026-03-01T10:02:00Z",
-                    "author": {"login": "codecov[bot]"},
-                    "authorAssociation": "MEMBER",
-                }]},
-            })
+            prs.append(
+                {
+                    "state": "CLOSED",
+                    "merged": False,
+                    "mergedAt": None,
+                    "closedAt": "2026-03-05T10:00:00Z",
+                    "createdAt": "2026-03-01T10:00:00Z",
+                    "author": {"login": "ext-dev"},
+                    "authorAssociation": "CONTRIBUTOR",
+                    "comments": {"nodes": []},
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "createdAt": "2026-03-01T10:02:00Z",
+                                "author": {"login": "codecov[bot]"},
+                                "authorAssociation": "MEMBER",
+                            }
+                        ]
+                    },
+                }
+            )
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_ghost_closing(data)
         assert result.details["ghost_closed"] == 12

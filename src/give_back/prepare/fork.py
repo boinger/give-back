@@ -28,24 +28,35 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
             ["gh", "--version"],
             capture_output=True,
             check=True,
+            timeout=10,
         )
     except FileNotFoundError:
         raise ForkError("gh CLI required. Install: https://cli.github.com")
+    except subprocess.TimeoutExpired:
+        raise ForkError("gh --version timed out after 10s")
 
     # 2. Check gh is authenticated
-    result = subprocess.run(
-        ["gh", "auth", "status"],
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        raise ForkError("gh auth status timed out after 10s")
     if result.returncode != 0:
         raise ForkError("gh CLI not authenticated. Run `gh auth login`")
 
     # 3. Get current user
-    result = subprocess.run(
-        ["gh", "api", "user", "-q", ".login"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", "api", "user", "-q", ".login"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        raise ForkError("gh api user timed out after 30s")
     if result.returncode != 0:
         raise ForkError(f"Failed to get GitHub username: {result.stderr.strip()}")
     fork_owner = result.stdout.strip()
@@ -56,11 +67,15 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
         return owner, repo
 
     # 5. Fork (gh handles "already forked" idempotently)
-    result = subprocess.run(
-        ["gh", "repo", "fork", f"{owner}/{repo}", "--clone=false"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", "repo", "fork", f"{owner}/{repo}", "--clone=false"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise ForkError("gh repo fork timed out after 60s")
     if result.returncode != 0:
         raise ForkError(f"Fork failed: {result.stderr.strip()}")
 
@@ -77,23 +92,34 @@ def _resolve_fork_name(fork_owner: str, upstream_owner: str, upstream_repo: str)
     Falls back to the upstream repo name if the API call fails.
     """
     # Try the obvious name first
-    result = subprocess.run(
-        ["gh", "api", f"repos/{fork_owner}/{upstream_repo}", "-q", ".name"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{fork_owner}/{upstream_repo}", "-q", ".name"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return upstream_repo
     if result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip()
 
     # Repo was renamed. Search the user's forks for one whose parent matches.
-    result = subprocess.run(
-        [
-            "gh", "api", f"repos/{upstream_owner}/{upstream_repo}/forks",
-            "-q", f'.[] | select(.owner.login == "{fork_owner}") | .name',
-        ],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                f"repos/{upstream_owner}/{upstream_repo}/forks",
+                "-q",
+                f'.[] | select(.owner.login == "{fork_owner}") | .name',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return upstream_repo
     if result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip().splitlines()[0]
 

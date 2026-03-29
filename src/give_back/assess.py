@@ -7,6 +7,7 @@ Used by both the `assess` CLI command and the dependency walker.
 from __future__ import annotations
 
 import base64
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -21,6 +22,7 @@ from give_back.reconcile import reconcile_merge_rate, should_reconcile
 from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
 
+_log = logging.getLogger(__name__)
 _console = Console(stderr=True)
 
 # License file names to try, in order of preference
@@ -207,7 +209,11 @@ def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = 
             result = signal_def.func(data)
             signal_results.append((signal_def.weight, result))
             successful_results.append(result)
-        except Exception:
+        except GiveBackError:
+            signal_results.append((signal_def.weight, None))
+            successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))
+        except Exception as exc:
+            _log.warning("Signal %s raised unexpected error: %s", signal_def.name, exc)
             signal_results.append((signal_def.weight, None))
             successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))
 

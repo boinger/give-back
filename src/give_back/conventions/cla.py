@@ -11,20 +11,25 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import httpx
+
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 _log = logging.getLogger(__name__)
 
 # Known CLA bot logins
-_CLA_BOT_LOGINS = frozenset({
-    "CLAassistant",
-    "linux-foundation-easycla",
-    "googlebot",
-    "google-cla",
-    "cla-checker",
-    "CLAassistant[bot]",
-    "easycla",
-})
+_CLA_BOT_LOGINS = frozenset(
+    {
+        "CLAassistant",
+        "linux-foundation-easycla",
+        "googlebot",
+        "google-cla",
+        "cla-checker",
+        "CLAassistant[bot]",
+        "easycla",
+    }
+)
 
 # Strings in CI config that indicate CLA enforcement
 _CLA_CI_PATTERNS = (
@@ -79,7 +84,7 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> s
             f"/repos/{owner}/{repo}/pulls",
             params={"state": "closed", "sort": "updated", "direction": "desc", "per_page": "5"},
         )
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError):
         _log.debug("Failed to fetch PRs for CLA check")
         return None
 
@@ -100,7 +105,7 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> s
                 login = (comment.get("user") or {}).get("login", "")
                 if login.lower() in {b.lower() for b in _CLA_BOT_LOGINS}:
                     return login
-        except Exception:
+        except (GiveBackError, httpx.HTTPError, OSError):
             _log.debug("Failed to fetch comments for PR #%s", pr_number)
             continue
 

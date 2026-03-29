@@ -6,15 +6,14 @@ All git operations use subprocess with list-form arguments (no shell).
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 from give_back.conventions.models import BranchConvention
 from give_back.exceptions import WorkspaceError
 
-_GITHUB_SLUG_RE = re.compile(
-    r"(?:git@github\.com:|https://github\.com/)([^/]+/[^/.]+?)(?:\.git)?$"
-)
+_GITHUB_SLUG_RE = re.compile(r"(?:git@github\.com:|https://github\.com/)([^/]+/[^/.]+?)(?:\.git)?$")
 
 
 def _normalize_github_url(url: str) -> str | None:
@@ -72,12 +71,16 @@ def setup_workspace(
             )
 
         # Existing workspace — fetch upstream
-        result = subprocess.run(
-            ["git", "fetch", "upstream"],
-            capture_output=True,
-            text=True,
-            cwd=clone_dir,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "fetch", "upstream"],
+                capture_output=True,
+                text=True,
+                cwd=clone_dir,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            raise WorkspaceError("git fetch upstream timed out after 60s")
         if result.returncode != 0:
             raise WorkspaceError(f"git fetch upstream failed: {result.stderr.strip()}")
     else:
@@ -85,11 +88,16 @@ def setup_workspace(
         fork_url = f"https://github.com/{fork_owner}/{effective_fork_repo}.git"
         clone_dir.parent.mkdir(parents=True, exist_ok=True)
 
-        result = subprocess.run(
-            ["git", "clone", fork_url, str(clone_dir)],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "clone", fork_url, str(clone_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(clone_dir, ignore_errors=True)
+            raise WorkspaceError("git clone timed out after 120s")
         if result.returncode != 0:
             raise WorkspaceError(f"Clone failed: {result.stderr.strip()}")
 
@@ -102,12 +110,16 @@ def setup_workspace(
         if result.returncode != 0:
             raise WorkspaceError(f"Failed to add upstream remote: {result.stderr.strip()}")
 
-        result = subprocess.run(
-            ["git", "fetch", "upstream"],
-            capture_output=True,
-            text=True,
-            cwd=clone_dir,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "fetch", "upstream"],
+                capture_output=True,
+                text=True,
+                cwd=clone_dir,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            raise WorkspaceError("git fetch upstream timed out after 60s")
         if result.returncode != 0:
             raise WorkspaceError(f"git fetch upstream failed: {result.stderr.strip()}")
 
@@ -138,12 +150,18 @@ def setup_workspace(
             cwd=clone_dir,
             check=True,
         )
-        subprocess.run(
-            ["git", "pull", "--rebase", f"upstream/{default_branch}"],
-            capture_output=True,
-            text=True,
-            cwd=clone_dir,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "pull", "--rebase", f"upstream/{default_branch}"],
+                capture_output=True,
+                text=True,
+                cwd=clone_dir,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            raise WorkspaceError("git pull --rebase timed out after 60s")
+        if result.returncode != 0:
+            raise WorkspaceError(f"git pull --rebase failed (possible conflict): {result.stderr.strip()}")
     else:
         result = subprocess.run(
             ["git", "checkout", "-b", branch_name, f"upstream/{default_branch}"],

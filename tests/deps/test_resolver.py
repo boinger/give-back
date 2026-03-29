@@ -241,9 +241,7 @@ class TestGoMetaResolution:
     @respx.mock
     def test_timeout_returns_none(self):
         """Network timeout returns None gracefully."""
-        respx.get("https://slow.example.com/pkg?go-get=1").mock(
-            side_effect=httpx.TimeoutException("timed out")
-        )
+        respx.get("https://slow.example.com/pkg?go-get=1").mock(side_effect=httpx.TimeoutException("timed out"))
         assert resolve_go_module("slow.example.com/pkg") is None
 
     @respx.mock
@@ -268,21 +266,15 @@ class TestGoMetaResolution:
     @respx.mock
     def test_http_404_returns_none(self):
         """Server returning 404 returns None."""
-        respx.get("https://gone.example.com/pkg?go-get=1").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://gone.example.com/pkg?go-get=1").mock(return_value=httpx.Response(404))
         assert resolve_go_module("gone.example.com/pkg") is None
 
     @respx.mock
     def test_deep_path_segment_stripping(self):
         """Deep paths strip to root module (k8s.io/api/core/v1 → k8s.io/api)."""
         # The full path 404s, but the root module path resolves
-        respx.get("https://k8s.io/api/core/v1?go-get=1").mock(
-            return_value=httpx.Response(404)
-        )
-        respx.get("https://k8s.io/api/core?go-get=1").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://k8s.io/api/core/v1?go-get=1").mock(return_value=httpx.Response(404))
+        respx.get("https://k8s.io/api/core?go-get=1").mock(return_value=httpx.Response(404))
         respx.get("https://k8s.io/api?go-get=1").mock(
             return_value=httpx.Response(
                 200,
@@ -329,9 +321,7 @@ class TestGoMetaResolution:
             '<meta name="go-import" content="example.com/other git https://github.com/wrong/repo">'
             '<meta name="go-import" content="example.com/pkg git https://github.com/right/repo">'
         )
-        respx.get("https://example.com/pkg?go-get=1").mock(
-            return_value=httpx.Response(200, text=html)
-        )
+        respx.get("https://example.com/pkg?go-get=1").mock(return_value=httpx.Response(200, text=html))
         assert resolve_go_module("example.com/pkg") == "right/repo"
 
     @respx.mock
@@ -341,9 +331,7 @@ class TestGoMetaResolution:
             '<meta name="go-import" content="example.com/pkg mod https://proxy.golang.org">'
             '<meta name="go-import" content="example.com/pkg git https://github.com/real/repo">'
         )
-        respx.get("https://example.com/pkg?go-get=1").mock(
-            return_value=httpx.Response(200, text=html)
-        )
+        respx.get("https://example.com/pkg?go-get=1").mock(return_value=httpx.Response(200, text=html))
         assert resolve_go_module("example.com/pkg") == "real/repo"
 
     @respx.mock
@@ -382,9 +370,7 @@ class TestResolveCratesIo:
 
     @respx.mock
     def test_crate_not_found(self):
-        respx.get("https://crates.io/api/v1/crates/nonexistent").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://crates.io/api/v1/crates/nonexistent").mock(return_value=httpx.Response(404))
         assert resolve_crates_io("nonexistent") is None
 
     @respx.mock
@@ -399,9 +385,7 @@ class TestResolveCratesIo:
 
     @respx.mock
     def test_crate_timeout(self):
-        respx.get("https://crates.io/api/v1/crates/slow").mock(
-            side_effect=httpx.TimeoutException("timed out")
-        )
+        respx.get("https://crates.io/api/v1/crates/slow").mock(side_effect=httpx.TimeoutException("timed out"))
         assert resolve_crates_io("slow") is None
 
 
@@ -428,9 +412,7 @@ class TestResolveNpm:
 
     @respx.mock
     def test_npm_not_found(self):
-        respx.get("https://registry.npmjs.org/nonexistent").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://registry.npmjs.org/nonexistent").mock(return_value=httpx.Response(404))
         assert resolve_npm("nonexistent") is None
 
     @respx.mock
@@ -477,9 +459,7 @@ class TestResolveRubygems:
 
     @respx.mock
     def test_gem_not_found(self):
-        respx.get("https://rubygems.org/api/v1/gems/nonexistent.json").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://rubygems.org/api/v1/gems/nonexistent.json").mock(return_value=httpx.Response(404))
         assert resolve_rubygems("nonexistent") is None
 
     @respx.mock

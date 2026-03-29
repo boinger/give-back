@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import re
 
+import httpx
+
 from give_back.conventions.models import BranchConvention
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 # Branch names that indicate a fork's default branch (not a feature branch).
@@ -44,7 +47,7 @@ def analyze_branch_names(client: GitHubClient, owner: str, repo: str) -> BranchC
                 "per_page": "20",
             },
         )
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError):
         return BranchConvention(pattern="unknown")
 
     # rest_get returns parsed JSON; for this endpoint it's a list.

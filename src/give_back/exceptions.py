@@ -2,8 +2,9 @@
 
 All custom exceptions inherit from GiveBackError. Handlers at system boundaries
 (CLI commands, API calls) name the specific exception they catch. Detector and
-signal isolation uses broad catches with debug logging to prevent one failure
-from crashing the pipeline (e.g., conventions/brief.py, assess.py signal eval).
+signal isolation catches expected failure types (GiveBackError, httpx.HTTPError,
+OSError, subprocess.SubprocessError) to prevent one failure from crashing the
+pipeline. Unexpected exceptions (programmer errors) propagate for visibility.
 """
 
 

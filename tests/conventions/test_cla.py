@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from give_back.conventions.cla import detect_cla
+from give_back.exceptions import GiveBackError
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ class TestClaPrCommentDetection:
 
     def test_api_error_graceful(self, clone_dir):
         mock_client = MagicMock()
-        mock_client.rest_get.side_effect = Exception("API error")
+        mock_client.rest_get.side_effect = GiveBackError("API error")
         # Should not raise, just return False
         assert detect_cla(clone_dir, client=mock_client, owner="org", repo="repo") is False
 

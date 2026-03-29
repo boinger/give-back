@@ -44,11 +44,13 @@ def _make_pr(
 
     reviews = []
     if review_at:
-        reviews.append({
-            "createdAt": review_at,
-            "author": {"login": "reviewer"},
-            "authorAssociation": "MEMBER",
-        })
+        reviews.append(
+            {
+                "createdAt": review_at,
+                "author": {"login": "reviewer"},
+                "authorAssociation": "MEMBER",
+            }
+        )
 
     return {
         "state": "MERGED",
@@ -355,21 +357,27 @@ class TestBotFiltering:
         """Reviews from bot accounts are ignored."""
         prs = []
         for _ in range(12):
-            prs.append({
-                "state": "MERGED",
-                "merged": True,
-                "mergedAt": "2026-03-05T10:00:00Z",
-                "closedAt": "2026-03-05T10:00:00Z",
-                "createdAt": "2026-03-01T10:00:00Z",
-                "author": {"login": "ext-dev"},
-                "authorAssociation": "CONTRIBUTOR",
-                "comments": {"nodes": []},
-                "reviews": {"nodes": [{
-                    "createdAt": "2026-03-01T10:02:00Z",
-                    "author": {"login": "codecov[bot]"},
-                    "authorAssociation": "MEMBER",
-                }]},
-            })
+            prs.append(
+                {
+                    "state": "MERGED",
+                    "merged": True,
+                    "mergedAt": "2026-03-05T10:00:00Z",
+                    "closedAt": "2026-03-05T10:00:00Z",
+                    "createdAt": "2026-03-01T10:00:00Z",
+                    "author": {"login": "ext-dev"},
+                    "authorAssociation": "CONTRIBUTOR",
+                    "comments": {"nodes": []},
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "createdAt": "2026-03-01T10:02:00Z",
+                                "author": {"login": "codecov[bot]"},
+                                "authorAssociation": "MEMBER",
+                            }
+                        ]
+                    },
+                }
+            )
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_time_to_response(data)
         assert result.score == 0.1
@@ -379,21 +387,27 @@ class TestBotFiltering:
         """Reviews from non-internal authors are ignored."""
         prs = []
         for _ in range(12):
-            prs.append({
-                "state": "MERGED",
-                "merged": True,
-                "mergedAt": "2026-03-05T10:00:00Z",
-                "closedAt": "2026-03-05T10:00:00Z",
-                "createdAt": "2026-03-01T10:00:00Z",
-                "author": {"login": "ext-dev"},
-                "authorAssociation": "CONTRIBUTOR",
-                "comments": {"nodes": []},
-                "reviews": {"nodes": [{
-                    "createdAt": "2026-03-01T10:02:00Z",
-                    "author": {"login": "random-person"},
-                    "authorAssociation": "NONE",
-                }]},
-            })
+            prs.append(
+                {
+                    "state": "MERGED",
+                    "merged": True,
+                    "mergedAt": "2026-03-05T10:00:00Z",
+                    "closedAt": "2026-03-05T10:00:00Z",
+                    "createdAt": "2026-03-01T10:00:00Z",
+                    "author": {"login": "ext-dev"},
+                    "authorAssociation": "CONTRIBUTOR",
+                    "comments": {"nodes": []},
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "createdAt": "2026-03-01T10:02:00Z",
+                                "author": {"login": "random-person"},
+                                "authorAssociation": "NONE",
+                            }
+                        ]
+                    },
+                }
+            )
         data = _make_repo_data(_make_graphql(prs))
         result = evaluate_time_to_response(data)
         assert result.score == 0.1

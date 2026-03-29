@@ -80,7 +80,6 @@ def save_assessment(assessment: Assessment) -> None:
         "incomplete": assessment.incomplete,
         "signals": [
             {
-                "name": s.summary,
                 "tier": s.tier.value,
                 "score": s.score,
                 "summary": s.summary,
@@ -89,10 +88,7 @@ def save_assessment(assessment: Assessment) -> None:
         ],
     }
 
-    try:
-        save_state(state)
-    except PermissionError:
-        pass  # CLI layer handles the warning
+    save_state(state)
 
 
 def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS) -> dict | None:

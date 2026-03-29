@@ -181,8 +181,13 @@ def test_context_has_lifecycle_fields(tmp_path: Path) -> None:
     brief = _make_brief()
 
     write_brief(
-        workspace, brief, issue_number=1, branch_name="fix/1-test", upstream_owner="pallets",
-        fork_owner="myuser", previous_issues=[{"issue_number": 99, "status": "merged"}],
+        workspace,
+        brief,
+        issue_number=1,
+        branch_name="fix/1-test",
+        upstream_owner="pallets",
+        fork_owner="myuser",
+        previous_issues=[{"issue_number": 99, "status": "merged"}],
     )
 
     ctx = json.loads((workspace / ".give-back" / "context.json").read_text())

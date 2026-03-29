@@ -465,7 +465,11 @@ def skip(repo: str) -> None:
         sys.exit(1)
 
     slug = f"{owner}/{repo_name}"
-    add_to_skip_list(slug)
+    try:
+        add_to_skip_list(slug)
+    except PermissionError:
+        _console.print("[yellow]Warning:[/yellow] Cannot write state file.")
+        return
     _console.print(f"Added {slug} to skip list.")
 
 
@@ -483,7 +487,11 @@ def unskip(repo: str) -> None:
         sys.exit(1)
 
     slug = f"{owner}/{repo_name}"
-    remove_from_skip_list(slug)
+    try:
+        remove_from_skip_list(slug)
+    except PermissionError:
+        _console.print("[yellow]Warning:[/yellow] Cannot write state file.")
+        return
     _console.print(f"Removed {slug} from skip list.")
 
 
@@ -630,7 +638,11 @@ def prepare(
     # 9. Write brief (with lifecycle context)
     try:
         write_brief(
-            workspace_path, brief, issue, branch_name, owner,
+            workspace_path,
+            brief,
+            issue,
+            branch_name,
+            owner,
             fork_owner=fork_owner,
             previous_issues=previous_issues,
         )

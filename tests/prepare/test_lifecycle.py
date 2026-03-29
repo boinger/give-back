@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from give_back.exceptions import GiveBackError
 from give_back.prepare.lifecycle import (
     OldBranchState,
     PrInfo,
@@ -49,9 +50,9 @@ class TestCheckOldBranchState:
     @patch("give_back.prepare.lifecycle.subprocess.run")
     def test_clean_tree_no_commits(self, mock_run):
         mock_run.side_effect = [
-            _completed(0, stdout=""),            # git status --porcelain (clean)
-            _completed(0, stdout="0\n"),          # git rev-list --count (0 ahead)
-            _completed(0, stdout=""),             # git branch -r (not pushed)
+            _completed(0, stdout=""),  # git status --porcelain (clean)
+            _completed(0, stdout="0\n"),  # git rev-list --count (0 ahead)
+            _completed(0, stdout=""),  # git branch -r (not pushed)
         ]
         state = check_old_branch_state(Path("/fake"), "fix/42", "main")
         assert state.commits_ahead == 0
@@ -62,8 +63,8 @@ class TestCheckOldBranchState:
     @patch("give_back.prepare.lifecycle.subprocess.run")
     def test_commits_ahead_and_pushed(self, mock_run):
         mock_run.side_effect = [
-            _completed(0, stdout=""),             # clean tree
-            _completed(0, stdout="3\n"),           # 3 ahead
+            _completed(0, stdout=""),  # clean tree
+            _completed(0, stdout="3\n"),  # 3 ahead
             _completed(0, stdout="  origin/fix/42\n"),  # pushed
         ]
         state = check_old_branch_state(Path("/fake"), "fix/42", "main")
@@ -74,9 +75,9 @@ class TestCheckOldBranchState:
     @patch("give_back.prepare.lifecycle.subprocess.run")
     def test_commits_ahead_not_pushed(self, mock_run):
         mock_run.side_effect = [
-            _completed(0, stdout=""),             # clean tree
-            _completed(0, stdout="3\n"),           # 3 ahead
-            _completed(0, stdout=""),             # not pushed
+            _completed(0, stdout=""),  # clean tree
+            _completed(0, stdout="3\n"),  # 3 ahead
+            _completed(0, stdout=""),  # not pushed
         ]
         state = check_old_branch_state(Path("/fake"), "fix/42", "main")
         assert state.commits_ahead == 3
@@ -116,8 +117,10 @@ class TestFindPrForBranch:
         mock_client = MagicMock()
         mock_client.rest_get.return_value = [
             {
-                "number": 456, "html_url": "https://github.com/org/repo/pull/456",
-                "state": "closed", "merged_at": "2026-03-01T10:00:00Z",
+                "number": 456,
+                "html_url": "https://github.com/org/repo/pull/456",
+                "state": "closed",
+                "merged_at": "2026-03-01T10:00:00Z",
             },
         ]
         result = find_pr_for_branch(mock_client, "org", "repo", "myuser", "fix/42")
@@ -132,7 +135,7 @@ class TestFindPrForBranch:
 
     def test_api_error_returns_none(self):
         mock_client = MagicMock()
-        mock_client.rest_get.side_effect = Exception("API error")
+        mock_client.rest_get.side_effect = GiveBackError("API error")
         result = find_pr_for_branch(mock_client, "org", "repo", "myuser", "fix/42")
         assert result is None
 
@@ -163,7 +166,10 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.cleanup_old_branch")
     def test_clean_no_work(self, mock_cleanup, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=0, pushed_to_origin=False, has_unpushed_commits=False, has_dirty_tree=False,
+            commits_ahead=0,
+            pushed_to_origin=False,
+            has_unpushed_commits=False,
+            has_dirty_tree=False,
         )
         result = resolve_old_workspace(Path("/fake"), self._make_context())
         assert result.action == ResolveAction.CLEAN_NO_WORK
@@ -172,7 +178,10 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.check_old_branch_state")
     def test_block_unpushed(self, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=3, pushed_to_origin=False, has_unpushed_commits=True, has_dirty_tree=False,
+            commits_ahead=3,
+            pushed_to_origin=False,
+            has_unpushed_commits=True,
+            has_dirty_tree=False,
         )
         result = resolve_old_workspace(Path("/fake"), self._make_context())
         assert result.action == ResolveAction.BLOCK_UNPUSHED
@@ -181,7 +190,10 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.check_old_branch_state")
     def test_block_dirty_tree(self, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=0, pushed_to_origin=False, has_unpushed_commits=False, has_dirty_tree=True,
+            commits_ahead=0,
+            pushed_to_origin=False,
+            has_unpushed_commits=False,
+            has_dirty_tree=True,
         )
         result = resolve_old_workspace(Path("/fake"), self._make_context())
         assert result.action == ResolveAction.BLOCK_UNPUSHED
@@ -192,11 +204,17 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.cleanup_old_branch")
     def test_archive_pushed_no_pr(self, mock_cleanup, mock_find_pr, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=2, pushed_to_origin=True, has_unpushed_commits=False, has_dirty_tree=False,
+            commits_ahead=2,
+            pushed_to_origin=True,
+            has_unpushed_commits=False,
+            has_dirty_tree=False,
         )
         mock_find_pr.return_value = None
         result = resolve_old_workspace(
-            Path("/fake"), self._make_context(), client=MagicMock(), fork_owner="myuser",
+            Path("/fake"),
+            self._make_context(),
+            client=MagicMock(),
+            fork_owner="myuser",
         )
         assert result.action == ResolveAction.ARCHIVE_PUSHED
         assert result.archived_entry is not None
@@ -208,11 +226,17 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.cleanup_old_branch")
     def test_archive_pr_open(self, mock_cleanup, mock_find_pr, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=2, pushed_to_origin=True, has_unpushed_commits=False, has_dirty_tree=False,
+            commits_ahead=2,
+            pushed_to_origin=True,
+            has_unpushed_commits=False,
+            has_dirty_tree=False,
         )
         mock_find_pr.return_value = PrInfo(pr_number=123, pr_url="https://github.com/org/repo/pull/123", state="open")
         result = resolve_old_workspace(
-            Path("/fake"), self._make_context(), client=MagicMock(), fork_owner="myuser",
+            Path("/fake"),
+            self._make_context(),
+            client=MagicMock(),
+            fork_owner="myuser",
         )
         assert result.action == ResolveAction.ARCHIVE_PR
         assert result.archived_entry["pr_url"] == "https://github.com/org/repo/pull/123"
@@ -223,11 +247,17 @@ class TestResolveOldWorkspace:
     @patch("give_back.prepare.lifecycle.cleanup_old_branch")
     def test_archive_pr_merged(self, mock_cleanup, mock_find_pr, mock_state):
         mock_state.return_value = OldBranchState(
-            commits_ahead=2, pushed_to_origin=True, has_unpushed_commits=False, has_dirty_tree=False,
+            commits_ahead=2,
+            pushed_to_origin=True,
+            has_unpushed_commits=False,
+            has_dirty_tree=False,
         )
         mock_find_pr.return_value = PrInfo(pr_number=456, pr_url="https://github.com/org/repo/pull/456", state="merged")
         result = resolve_old_workspace(
-            Path("/fake"), self._make_context(), client=MagicMock(), fork_owner="myuser",
+            Path("/fake"),
+            self._make_context(),
+            client=MagicMock(),
+            fork_owner="myuser",
         )
         assert result.action == ResolveAction.ARCHIVE_PR
         assert result.archived_entry["status"] == "merged"

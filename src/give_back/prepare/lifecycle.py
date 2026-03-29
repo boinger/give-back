@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
+import httpx
+
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 # ---------------------------------------------------------------------------
@@ -132,7 +135,10 @@ def check_old_branch_state(
     except (subprocess.TimeoutExpired, OSError, ValueError):
         # Can't determine state — assume work exists (safe)
         return OldBranchState(
-            commits_ahead=1, pushed_to_origin=False, has_unpushed_commits=True, has_dirty_tree=has_dirty_tree,
+            commits_ahead=1,
+            pushed_to_origin=False,
+            has_unpushed_commits=True,
+            has_dirty_tree=has_dirty_tree,
         )
 
     # Check if branch exists on origin
@@ -183,7 +189,7 @@ def find_pr_for_branch(
                 "direction": "desc",
             },
         )
-    except Exception:
+    except (GiveBackError, httpx.HTTPError):
         return None
 
     if not isinstance(prs, list) or not prs:
@@ -325,9 +331,7 @@ def update_context_status(
         pass  # Non-critical — check command will warn
 
 
-_GITHUB_REMOTE_RE = re.compile(
-    r"(?:git@github\.com:|https://github\.com/)([^/]+)/([^/.]+?)(?:\.git)?$"
-)
+_GITHUB_REMOTE_RE = re.compile(r"(?:git@github\.com:|https://github\.com/)([^/]+)/([^/.]+?)(?:\.git)?$")
 
 
 def parse_fork_owner_from_remote(clone_dir: Path) -> str | None:

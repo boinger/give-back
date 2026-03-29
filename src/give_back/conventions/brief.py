@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from datetime import datetime, timezone
+
+import httpx
 
 from give_back.conventions.branches import analyze_branch_names
 from give_back.conventions.cla import detect_cla
@@ -19,6 +22,7 @@ from give_back.conventions.models import (
 from give_back.conventions.pr_template import find_pr_template
 from give_back.conventions.style import detect_style
 from give_back.conventions.testing import detect_testing
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 _log = logging.getLogger(__name__)
@@ -60,11 +64,11 @@ def _fetch_review_info(client: GitHubClient, owner: str, repo: str) -> ReviewInf
                         login = user.get("login")
                         if login:
                             reviewers.add(login)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("Failed to fetch reviews for PR #%s", pr_number)
                 continue
 
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
         _log.debug("Failed to fetch PRs for review info")
 
     return ReviewInfo(
@@ -147,7 +151,7 @@ def scan_conventions(
         try:
             issue_data = client.rest_get(f"/repos/{owner}/{repo}/issues/{issue_number}")
             brief.issue_title = issue_data.get("title")
-        except Exception:
+        except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
             _log.debug("Failed to fetch issue #%s", issue_number)
 
     # Clone-based detectors.
@@ -159,47 +163,47 @@ def scan_conventions(
             # Commit format
             try:
                 brief.commit_format = analyze_commits(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("Commit analysis failed")
                 brief.commit_format = CommitFormat(style="unknown")
 
             # Merge strategy
             try:
                 brief.merge_strategy = detect_merge_strategy(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("Merge strategy detection failed")
 
             # PR template
             try:
                 brief.pr_template = find_pr_template(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("PR template detection failed")
 
             # DCO
             try:
                 brief.dco_required = detect_dco(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("DCO detection failed")
 
             # CLA
             try:
                 brief.cla_required = detect_cla(clone_dir, client=client, owner=owner, repo=repo)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("CLA detection failed")
 
             # Testing
             try:
                 brief.test_info = detect_testing(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("Test detection failed")
 
             # Style
             try:
                 brief.style_info = detect_style(clone_dir)
-            except Exception:
+            except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
                 _log.debug("Style detection failed")
 
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
         _log.debug("Clone failed for %s/%s", owner, repo)
 
     # API-based detectors (outside clone context).
@@ -207,20 +211,20 @@ def scan_conventions(
     # Branch convention
     try:
         brief.branch_convention = analyze_branch_names(client, owner, repo)
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
         _log.debug("Branch analysis failed")
 
     # Default branch from API
     try:
         repo_data = client.rest_get(f"/repos/{owner}/{repo}")
         brief.default_branch = repo_data.get("default_branch", "main")
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
         _log.debug("Failed to fetch default branch")
 
     # Review info (optional)
     try:
         brief.review_info = _fetch_review_info(client, owner, repo)
-    except Exception:
+    except (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError):
         _log.debug("Review info fetch failed")
 
     # Generate notes based on findings.

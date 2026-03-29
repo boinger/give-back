@@ -7,25 +7,27 @@ responses that don't represent real maintainer engagement.
 from __future__ import annotations
 
 _BOT_SUFFIXES = ("[bot]", "-bot")
-_KNOWN_BOTS = frozenset({
-    "dependabot",
-    "renovate",
-    "codecov",
-    "stale",
-    "CLAassistant",
-    "allcontributors",
-    "netlify",
-    "vercel",
-    "sonarcloud",
-    "codeclimate",
-    "snyk-bot",
-    "imgbot",
-    "greenkeeper",
-    "depfu",
-    "mergify",
-    "kodiakhq",
-    "gitguardian",
-})
+_KNOWN_BOTS = frozenset(
+    {
+        "dependabot",
+        "renovate",
+        "codecov",
+        "stale",
+        "CLAassistant",
+        "allcontributors",
+        "netlify",
+        "vercel",
+        "sonarcloud",
+        "codeclimate",
+        "snyk-bot",
+        "imgbot",
+        "greenkeeper",
+        "depfu",
+        "mergify",
+        "kodiakhq",
+        "gitguardian",
+    }
+)
 
 
 def is_bot(login: str | None) -> bool:

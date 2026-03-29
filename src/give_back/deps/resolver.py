@@ -150,7 +150,7 @@ def _resolve_go_via_meta(module_path: str) -> str | None:
                 return slug
 
     # Cache negative result to avoid retrying failed hosts
-    root = "/".join(parts[:min(len(parts), 3)])
+    root = "/".join(parts[: min(len(parts), 3)])
     _go_meta_cache[root] = None
     return None
 

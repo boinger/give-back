@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,7 @@ from give_back.conventions.models import (
     PrTemplate,
     StyleInfo,
 )
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 
@@ -163,7 +165,7 @@ class TestDetectorFailure:
     @pytest.mark.usefixtures("_patch_clone")
     def test_commit_detector_fails_others_succeed(self, mock_client, _patch_detectors):
         """If analyze_commits raises, the brief still has results from other detectors."""
-        _patch_detectors["commits"].side_effect = RuntimeError("git log failed")
+        _patch_detectors["commits"].side_effect = subprocess.SubprocessError("git log failed")
 
         mock_client.rest_get.side_effect = lambda path, **kwargs: (
             {"default_branch": "main"} if path == "/repos/test/repo" else []
@@ -183,9 +185,9 @@ class TestDetectorFailure:
     @pytest.mark.usefixtures("_patch_clone")
     def test_multiple_detectors_fail(self, mock_client, _patch_detectors):
         """Multiple detector failures still produce a brief with partial results."""
-        _patch_detectors["commits"].side_effect = RuntimeError("boom")
-        _patch_detectors["merge"].side_effect = RuntimeError("boom")
-        _patch_detectors["style"].side_effect = RuntimeError("boom")
+        _patch_detectors["commits"].side_effect = OSError("boom")
+        _patch_detectors["merge"].side_effect = OSError("boom")
+        _patch_detectors["style"].side_effect = OSError("boom")
 
         mock_client.rest_get.side_effect = lambda path, **kwargs: (
             {"default_branch": "develop"} if path == "/repos/test/repo" else []
@@ -240,7 +242,7 @@ class TestIssueTitle:
 
         def rest_get_side_effect(path, **kwargs):
             if "/issues/" in path:
-                raise RuntimeError("API error")
+                raise GiveBackError("API error")
             if path == "/repos/test/repo":
                 return {"default_branch": "main"}
             if "/pulls" in path:
@@ -342,7 +344,7 @@ class TestCloneFailure:
             patch("give_back.conventions.brief.cloned_repo") as mock_cm,
             patch("give_back.conventions.brief.analyze_branch_names") as mock_branches,
         ):
-            mock_cm.side_effect = RuntimeError("Clone failed")
+            mock_cm.side_effect = OSError("Clone failed")
             mock_branches.return_value = BranchConvention(
                 pattern="type/description",
                 examples=["fix/thing"],
