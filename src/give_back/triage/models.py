@@ -22,6 +22,7 @@ class Competition(Enum):
     NONE = "None"
     LOW = "Low"  # Competing PR exists but stale (6+ months)
     HIGH = "High"  # Active competing PR or recent claim comment
+    RESOLVED = "Resolved"  # Merged PR may already address this issue
 
 
 @dataclass

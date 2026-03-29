@@ -13,6 +13,7 @@ _COMPETITION_COLORS = {
     Competition.NONE: "green",
     Competition.LOW: "yellow",
     Competition.HIGH: "red",
+    Competition.RESOLVED: "bright_magenta",
 }
 
 

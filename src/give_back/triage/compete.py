@@ -1,8 +1,9 @@
 """Competing work detection for candidate issues.
 
 For each IssueCandidate, checks:
-1. Linked open PRs (via search API) — active vs. stale
-2. Claim comments on the issue (patterns like "I'm working on this", "WIP", etc.)
+1. Merged PRs that may already address the issue — flags as RESOLVED
+2. Linked open PRs (via search API) — active vs. stale
+3. Claim comments on the issue (patterns like "I'm working on this", "WIP", etc.)
 
 Updates the candidate's ``competition`` and ``competition_detail`` fields in-place.
 """
@@ -53,10 +54,17 @@ def check_competition(
     now = datetime.now(timezone.utc)
     for candidate in candidates:
         try:
+            merged_competition, merged_detail = _check_merged_prs(client, owner, repo, candidate.number)
             pr_competition, pr_detail = _check_linked_prs(client, owner, repo, candidate.number, now)
             claim_competition, claim_detail = _check_claim_comments(client, owner, repo, candidate.number, now)
         except GiveBackError:
             # Leave competition as NONE on API errors
+            continue
+
+        # RESOLVED trumps everything — a merged PR likely already fixes the issue
+        if merged_competition == Competition.RESOLVED:
+            candidate.competition = Competition.RESOLVED
+            candidate.competition_detail = merged_detail
             continue
 
         # Pick the higher competition level; prefer PR detail when both are HIGH
@@ -76,7 +84,7 @@ def check_competition(
 
 def _max_competition(a: Competition, b: Competition) -> Competition:
     """Return the higher competition level."""
-    order = {Competition.NONE: 0, Competition.LOW: 1, Competition.HIGH: 2}
+    order = {Competition.NONE: 0, Competition.LOW: 1, Competition.HIGH: 2, Competition.RESOLVED: 3}
     return a if order[a] >= order[b] else b
 
 
@@ -126,6 +134,47 @@ def _check_linked_prs(
     if days_since_update > _STALE_PR_DAYS:
         return Competition.LOW, f"PR #{pr_number} stale {months_since_update} months"
     return Competition.HIGH, f"PR #{pr_number} active"
+
+
+def _check_merged_prs(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    issue_number: int,
+) -> tuple[Competition, str | None]:
+    """Search for merged PRs that reference this issue number.
+
+    Returns (RESOLVED, detail) if a merged PR is found, (NONE, None) otherwise.
+    """
+    query = f"repo:{owner}/{repo} is:pr is:merged {issue_number}"
+    result = client.search(query)
+
+    if not isinstance(result, dict):
+        return Competition.NONE, None
+
+    items = result.get("items", [])
+    if not items:
+        return Competition.NONE, None
+
+    # Find the most recently merged PR
+    most_recent = None
+    most_recent_closed: datetime | None = None
+
+    for item in items:
+        closed_str = item.get("closed_at", "")
+        if not closed_str:
+            continue
+        closed = datetime.fromisoformat(closed_str.replace("Z", "+00:00"))
+        if most_recent_closed is None or closed > most_recent_closed:
+            most_recent_closed = closed
+            most_recent = item
+
+    if most_recent is None or most_recent_closed is None:
+        return Competition.NONE, None
+
+    pr_number = most_recent.get("number", "?")
+    merged_date = most_recent_closed.strftime("%Y-%m-%d")
+    return Competition.RESOLVED, f"PR #{pr_number} merged {merged_date} may already address this"
 
 
 def _check_claim_comments(
