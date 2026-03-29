@@ -10,9 +10,9 @@ import base64
 import logging
 from dataclasses import dataclass, field
 
-from rich.console import Console
 from rich.progress import Progress
 
+from give_back.console import stderr_console as _console
 from give_back.deps.filter import filter_candidates
 from give_back.deps.parser import (
     parse_cargo_toml,
@@ -30,8 +30,6 @@ from give_back.signals import ALL_SIGNALS
 from give_back.state import get_cached_assessment, get_skip_list, save_assessment
 
 logger = logging.getLogger(__name__)
-
-_console = Console(stderr=True)
 
 
 @dataclass

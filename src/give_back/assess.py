@@ -11,8 +11,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
-from rich.console import Console
-
+from give_back.console import stderr_console as _console
 from give_back.exceptions import GiveBackError, RateLimitError, RepoNotFoundError
 from give_back.github_client import GitHubClient
 from give_back.graphql.queries import PULL_REQUESTS_PAGE_QUERY, VIABILITY_QUERY
@@ -23,7 +22,6 @@ from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
 
 _log = logging.getLogger(__name__)
-_console = Console(stderr=True)
 
 # License file names to try, in order of preference
 _LICENSE_FILENAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")

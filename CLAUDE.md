@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-- **Tech Stack:** Python 3.13+, Click, httpx, rich
+- **Tech Stack:** Python 3.11+, Click, httpx, rich
 - **Linter/Formatter:** ruff (line-length: 120, rules: E, F, I)
 - **Tests:** pytest + respx (httpx mock library)
 - **Package Manager:** uv

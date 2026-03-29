@@ -6,10 +6,10 @@ import re
 import sys
 
 import click
-from rich.console import Console
 
 from give_back import __version__
 from give_back.auth import resolve_token
+from give_back.console import stderr_console as _console
 from give_back.exceptions import (
     AuthenticationError,
     ForkError,
@@ -34,8 +34,6 @@ from give_back.output import (
 )
 from give_back.signals import ALL_SIGNALS
 from give_back.state import add_to_skip_list, get_cached_assessment, load_config, remove_from_skip_list, save_assessment
-
-_console = Console(stderr=True)
 
 # Matches owner/repo or https://github.com/owner/repo (with optional trailing slash/path)
 _GITHUB_URL_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?(?:/.*)?$")

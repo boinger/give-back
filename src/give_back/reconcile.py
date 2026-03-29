@@ -83,9 +83,7 @@ def reconcile_merge_rate(
 
     Returns a new SignalResult if the score changed, or None if no adjustment needed.
     """
-    from rich.console import Console
-
-    _console = Console(stderr=True)
+    from give_back.console import stderr_console as _console
 
     # Extract collaborator authors from the original signal's details
     # The PR merge rate signal stores PR data we need
@@ -127,8 +125,8 @@ def reconcile_merge_rate(
     original_external_closed = original_result.details.get("external_closed", 0)
 
     # Add reclassified PRs to external counts
-    # Conservative: count all transitioned PRs as merged (they were likely merged
-    # since the author was promoted to collaborator)
+    # NOTE: This overcounts — all merged PRs from transitioned authors are added,
+    # including post-promotion PRs. See TODOS.md for a more precise heuristic.
     adjusted_merged = original_external_merged + transitioned_pr_count
     adjusted_closed = original_external_closed + transitioned_pr_count
 
@@ -200,8 +198,12 @@ def _check_author_transition(
             if item.get("pull_request", {}).get("merged_at"):
                 external_count += 1
 
-        # If they have merged PRs, it's likely they were once external
-        # (conservative heuristic — can't directly verify association at PR time)
+        # KNOWN OVERCOUNT: This counts ALL merged PRs from the author, including
+        # PRs created after they became a collaborator. GitHub's authorAssociation
+        # reflects the current role, not the role at PR time, so there's no API
+        # way to distinguish pre-promotion from post-promotion PRs. This inflates
+        # the adjusted score. See TODOS.md for a date-based heuristic that would
+        # reduce the overcount by filtering on PR creation dates.
         return external_count
 
     except GiveBackError:

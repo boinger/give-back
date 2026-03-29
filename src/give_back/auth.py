@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from rich.console import Console
-
-_console = Console(stderr=True)
+from give_back.console import stderr_console as _console
 
 
 def resolve_token() -> str | None:

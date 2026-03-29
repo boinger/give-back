@@ -16,7 +16,7 @@ Results are a Green/Yellow/Red viability tier with a signal breakdown.
 
 ## Install
 
-Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ### Global install (recommended)
 
