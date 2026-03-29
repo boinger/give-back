@@ -33,7 +33,7 @@ across all your contributions.
 
 ## Install
 
-Requires Python 3.11+ and [uv](https://github.com/astral-sh/uv).
+Requires Python 3.11+ and [uv](https://github.com/astral-sh/uv) (fast Python package manager).
 
 ```bash
 # Recommended: install as a global CLI tool
