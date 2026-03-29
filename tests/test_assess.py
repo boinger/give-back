@@ -37,7 +37,7 @@ def _make_signals(specs: list[tuple]) -> list[SignalDef]:
 
 
 # Shared patches applied to every test: avoid real API calls, skip reconciliation and LLM license.
-_PATCH_FETCH = patch("give_back.assess._fetch_repo_data", return_value=_fake_repo_data())
+_PATCH_FETCH = patch("give_back.assess.fetch_repo_data", return_value=_fake_repo_data())
 _PATCH_RECONCILE = patch("give_back.assess.should_reconcile", return_value=False)
 _PATCH_LLM_LICENSE = patch("give_back.assess._try_llm_license_classification")
 

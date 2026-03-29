@@ -14,7 +14,7 @@ give-back evaluates open-source repos for contribution viability using GitHub AP
 ```
 CLI (cli.py)
   ├── assess ──► cache check → (hit: display cached) or (miss: auth → assess.py → output)
-  │     ├── assess.py ──► _fetch_repo_data (4 API calls) → signals → scoring
+  │     ├── assess.py ──► fetch_repo_data (4 API calls) → evaluate_signals → scoring
   │     ├── signals/ (9 pure functions, each returns SignalResult)
   │     ├── scoring.py ──► signal results ──► Tier (GREEN/YELLOW/RED)
   │     └── state.py ──► ~/.give-back/state.json (assessment cache + reconstruct)
@@ -32,6 +32,8 @@ CLI (cli.py)
   │     └── submit.py ──► context.json + brief → git push → gh pr create
   ├── status ──► scan workspaces → refresh PR state → display
   │     └── status.py ──► context.json files + GitHub API → contribution list
+  ├── audit ──► community profile + templates + labels + signals → checklist
+  │     └── audit.py ──► fetch_repo_data → health checks + evaluate_signals → report
   ├── prepare/lifecycle.py ──► workspace state machine (working → pr_open → merged)
   ├── auth.py ──► GITHUB_TOKEN / gh CLI / unauthenticated
   ├── github_client.py ──► httpx ──► GitHub API (GraphQL + REST)
@@ -79,6 +81,7 @@ make run ARGS='unskip google/protobuf'    # remove from skip list
 make run ARGS='discover --language python' # find repos to contribute to
 make run ARGS='submit'                    # create PR from workspace
 make run ARGS='status'                    # check contribution status
+make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist
 ```
 
 ## Key Files
@@ -100,3 +103,4 @@ make run ARGS='status'                    # check contribution status
 | `src/give_back/discover/rank.py` | Light ranking by search metadata |
 | `src/give_back/submit.py` | PR creation from workspace context |
 | `src/give_back/status.py` | Contribution tracking across repos |
+| `src/give_back/audit.py` | Maintainer self-assessment checklist |

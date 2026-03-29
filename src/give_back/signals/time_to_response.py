@@ -124,6 +124,11 @@ def evaluate_time_to_response(data: RepoData) -> SignalResult:
         if association in INTERNAL_ASSOCIATIONS:
             continue
 
+        # Skip bot-authored PRs (Dependabot, Renovate, etc.)
+        author_login = (pr.get("author") or {}).get("login", "")
+        if _is_bot(author_login):
+            continue
+
         created_at = pr.get("createdAt")
         if not created_at:
             continue
@@ -147,8 +152,12 @@ def evaluate_time_to_response(data: RepoData) -> SignalResult:
             if closed_dt < cutoff:
                 continue
             association = pr.get("authorAssociation", "NONE")
-            if association not in INTERNAL_ASSOCIATIONS:
-                external_count += 1
+            if association in INTERNAL_ASSOCIATIONS:
+                continue
+            author_login = (pr.get("author") or {}).get("login", "")
+            if _is_bot(author_login):
+                continue
+            external_count += 1
 
         if external_count > 0:
             return SignalResult(

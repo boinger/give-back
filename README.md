@@ -186,6 +186,21 @@ give-back status --dir ~/alt  # scan alternate workspace root
 Shows PR state (open, reviewed, merged, closed) with review status per
 reviewer.
 
+## For maintainers
+
+If you maintain an open-source project, audit your repo's contributor-friendliness.
+
+```bash
+give-back audit pallets/flask
+give-back audit pallets/flask --verbose         # show signal details
+give-back audit pallets/flask --conventions     # also scan conventions (clones repo)
+give-back audit pallets/flask --compare django/django  # side-by-side comparison
+```
+
+Produces a pass/fail checklist covering community health files (LICENSE,
+CONTRIBUTING, CoC, SECURITY), templates, labels, and viability signals.
+Each failing item includes a recommendation with links or commands to fix it.
+
 ## Additional commands
 
 ### Dependency walking
@@ -240,7 +255,7 @@ contribute to grafana/alloy."
 ## Development
 
 ```bash
-make pre-commit    # format + lint + test (766 tests)
+make pre-commit    # format + lint + test (794 tests)
 make test          # tests only
 make lint          # ruff check + format
 ```

@@ -1030,3 +1030,75 @@ def status(json_output: bool, verbose: bool, workspace_dir: str | None) -> None:
         print_status_json(contributions, archived)
     else:
         print_status(contributions, archived, verbose=verbose)
+
+
+@cli.command()
+@click.argument("repo")
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
+@click.option("--verbose", "-v", is_flag=True, help="Show signal details (scores, sample sizes).")
+@click.option("--conventions", is_flag=True, help="Also scan contribution conventions (clones the repo, slower).")
+@click.option("--compare", default=None, help="Compare against another repo side-by-side.")
+def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compare: str | None) -> None:
+    """Audit a repo's contributor-friendliness for maintainers.
+
+    Produces a checklist of community health files, templates, labels, and
+    viability signals with actionable recommendations for each failing item.
+
+    Examples:
+
+        give-back audit pallets/flask
+
+        give-back audit pallets/flask --compare django/django
+
+        give-back audit pallets/flask --conventions
+    """
+    from give_back.audit import run_audit
+    from give_back.output import print_audit, print_audit_comparison, print_audit_json
+
+    try:
+        owner, repo_name = _parse_repo(repo)
+    except click.BadParameter as exc:
+        _console.print(f"[red]Error:[/red] {exc.format_message()}")
+        sys.exit(1)
+
+    compare_owner: str | None = None
+    compare_repo: str | None = None
+    if compare:
+        try:
+            compare_owner, compare_repo = _parse_repo(compare)
+        except click.BadParameter as exc:
+            _console.print(f"[red]Error:[/red] --compare: {exc.format_message()}")
+            sys.exit(1)
+
+    token = resolve_token()
+    if not token:
+        _console.print("[yellow]Warning:[/yellow] No auth token. Audit may be limited by rate limits.")
+
+    try:
+        with GitHubClient(token=token) as client:
+            report = run_audit(client, owner, repo_name, verbose=verbose, conventions=conventions)
+
+            if compare_owner and compare_repo:
+                compare_report = run_audit(
+                    client, compare_owner, compare_repo, verbose=verbose, conventions=conventions
+                )
+                if json_output:
+                    # For JSON comparison, print both reports
+                    print_audit_json(report)
+                    print_audit_json(compare_report)
+                else:
+                    print_audit_comparison(report, compare_report)
+            elif json_output:
+                print_audit_json(report)
+            else:
+                print_audit(report, verbose=verbose)
+
+    except AuthenticationError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+    except RepoNotFoundError:
+        _console.print(f"[red]Error:[/red] Repository not found: {owner}/{repo_name}")
+        sys.exit(1)
+    except RateLimitError as exc:
+        _console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)

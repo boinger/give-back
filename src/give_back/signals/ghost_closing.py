@@ -59,6 +59,12 @@ def evaluate_ghost_closing(data: RepoData) -> SignalResult:
         if association in INTERNAL_ASSOCIATIONS:
             continue
 
+        # Skip bot-authored PRs (Dependabot, Renovate, etc.) — auto-closed bot
+        # PRs without comments are normal, not ghost-closing
+        author_login = (pr.get("author") or {}).get("login", "")
+        if is_bot(author_login):
+            continue
+
         external_closed += 1
 
         # Check if PR has any human (non-bot) comments or reviews

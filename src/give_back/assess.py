@@ -113,11 +113,14 @@ def _needs_ai_search(contributing_text: str | None) -> bool:
     return True
 
 
-def _fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool) -> RepoData:
+def fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool = False) -> RepoData:
     """Fetch all data needed for signal evaluation.
 
     Makes 1 GraphQL call for repo metadata, then paginates PRs (50 per page)
     until we have enough history to cover the 12-month signal window.
+
+    Public so that callers (e.g. audit) can fetch once and pass the data to
+    both ``evaluate_signals`` and their own checks.
     """
     if verbose:
         _console.print(f"  [dim]Fetching GraphQL data for {owner}/{repo}...[/dim]")
@@ -185,19 +188,16 @@ def _fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool)
     )
 
 
-def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = False) -> Assessment:
-    """Run the full viability assessment for a single repo.
+def evaluate_signals(data: RepoData, client: GitHubClient, verbose: bool = False) -> Assessment:
+    """Evaluate all viability signals against pre-fetched repo data.
 
-    Fetches data, evaluates all signals, computes tier, and returns an Assessment.
+    Runs each signal, computes the weighted tier, performs bias reconciliation,
+    and attempts LLM license classification. Returns an Assessment with
+    ``signal_names`` populated for stable name→result mapping.
 
-    Raises:
-        RepoNotFoundError: If the repository does not exist.
-        GraphQLError: If a GraphQL error occurs.
-        RateLimitError: If the rate limit is exceeded.
-        GiveBackError: On other API errors.
+    Separated from ``fetch_repo_data`` so callers (e.g. audit) can fetch once
+    and use the ``RepoData`` for both signal evaluation and their own checks.
     """
-    data = _fetch_repo_data(client, owner, repo, verbose)
-
     # Evaluate signals
     signal_results: list[tuple] = []
     successful_results: list[SignalResult] = []
@@ -225,7 +225,7 @@ def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = 
         # Find the merge rate signal index
         for i, signal_def in enumerate(ALL_SIGNALS):
             if "merge" in signal_def.name.lower() and successful_results[i].score < 0.4:
-                adjusted = reconcile_merge_rate(client, owner, repo, successful_results[i], verbose=verbose)
+                adjusted = reconcile_merge_rate(client, data.owner, data.repo, successful_results[i], verbose=verbose)
                 if adjusted is not None:
                     successful_results[i] = adjusted
                     signal_results[i] = (signal_def.weight, adjusted)
@@ -235,19 +235,35 @@ def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = 
 
     # LLM-assisted license classification: if a license signal needs human review,
     # try to fetch the LICENSE file and classify it with an LLM.
-    _try_llm_license_classification(client, owner, repo, successful_results, verbose)
+    _try_llm_license_classification(client, data.owner, data.repo, successful_results, verbose)
 
     # Build assessment
     now = datetime.now(timezone.utc).isoformat()
     return Assessment(
-        owner=owner,
-        repo=repo,
+        owner=data.owner,
+        repo=data.repo,
         overall_tier=tier,
         signals=successful_results,
         gate_passed=gate_passed,
         incomplete=incomplete,
         timestamp=now,
+        signal_names=signal_names,
     )
+
+
+def run_assessment(client: GitHubClient, owner: str, repo: str, verbose: bool = False) -> Assessment:
+    """Run the full viability assessment for a single repo.
+
+    Convenience wrapper: fetches data then evaluates signals.
+
+    Raises:
+        RepoNotFoundError: If the repository does not exist.
+        GraphQLError: If a GraphQL error occurs.
+        RateLimitError: If the rate limit is exceeded.
+        GiveBackError: On other API errors.
+    """
+    data = fetch_repo_data(client, owner, repo, verbose)
+    return evaluate_signals(data, client, verbose)
 
 
 def _fetch_license_text(client: GitHubClient, owner: str, repo: str) -> str | None:

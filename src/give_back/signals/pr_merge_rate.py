@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from give_back.models import RepoData, SignalResult, SignalWeight, score_to_tier
+from give_back.signals._bots import is_bot
 
 NAME = "External PR merge rate"
 WEIGHT = SignalWeight.HIGH
@@ -63,6 +64,11 @@ def evaluate_pr_merge_rate(data: RepoData) -> SignalResult:
 
         # Skip internal PRs
         if association in INTERNAL_ASSOCIATIONS:
+            continue
+
+        # Skip bot-authored PRs (Dependabot, Renovate, etc.)
+        author_login = (pr.get("author") or {}).get("login", "")
+        if is_bot(author_login):
             continue
 
         external_closed += 1

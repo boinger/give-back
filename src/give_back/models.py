@@ -117,6 +117,9 @@ class Assessment:
     timestamp: str
     """ISO 8601 timestamp of when the assessment was performed."""
 
+    signal_names: list[str] = field(default_factory=list)
+    """Signal names in the same order as signals, for stable name→result mapping."""
+
 
 @dataclass
 class Config:
