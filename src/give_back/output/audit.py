@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from rich.table import Table
 
@@ -20,8 +21,8 @@ _CATEGORY_HEADERS = {
 _CATEGORY_ORDER = ["community_health", "templates", "labels", "signals", "conventions"]
 
 
-def print_audit(report: AuditReport, verbose: bool = False) -> None:
-    """Print audit results as a checklist."""
+def print_audit(report: AuditReport, verbose: bool = False, previous: dict | None = None) -> None:
+    """Print audit results as a checklist, with optional delta from *previous*."""
     _console.print()
     _console.print(f"  Audit: [bold]{report.owner}/{report.repo}[/bold]")
     if report.health_percentage is not None:
@@ -59,11 +60,78 @@ def print_audit(report: AuditReport, verbose: bool = False) -> None:
 
     _console.print(f"  Score: {passing}/{total} checks passing")
 
+    if previous is not None:
+        _print_delta(report, previous)
+
     # Suggest --conventions if not already included and basic checks look good
     has_conventions = any(item.category == "conventions" for item in report.items)
     if not has_conventions and passing > total * 0.6:
         _console.print("  [dim]Run with --conventions to also check commit format, code style, and CI setup.[/dim]")
     _console.print()
+
+
+def _format_audit_date(iso_timestamp: str) -> str:
+    """Format an ISO timestamp as a human-friendly date."""
+    try:
+        dt = datetime.fromisoformat(iso_timestamp)
+        now_year = datetime.now(timezone.utc).year
+        if dt.year == now_year:
+            return dt.strftime("%B %-d")
+        return dt.strftime("%B %-d, %Y")
+    except (ValueError, TypeError):
+        return "unknown date"
+
+
+def _compute_delta(report: AuditReport, previous: dict) -> dict:
+    """Compute the delta between a current report and a previous snapshot.
+
+    Returns a dict with keys: prev_passing, prev_total, newly_passing,
+    newly_failing, change, totals_differ.
+    """
+    prev_items = previous.get("items", {})
+    current_items = {item.name: item.passed for item in report.items}
+
+    # Only compare the intersection of keys
+    common_keys = set(prev_items) & set(current_items)
+    newly_passing = sorted(k for k in common_keys if current_items[k] and not prev_items[k])
+    newly_failing = sorted(k for k in common_keys if not current_items[k] and prev_items[k])
+
+    prev_passing = sum(1 for v in prev_items.values() if v)
+    prev_total = len(prev_items)
+
+    return {
+        "prev_passing": prev_passing,
+        "prev_total": prev_total,
+        "newly_passing": newly_passing,
+        "newly_failing": newly_failing,
+        "change": len(newly_passing) - len(newly_failing),
+        "totals_differ": prev_total != len(report.items),
+    }
+
+
+def _print_delta(report: AuditReport, previous: dict) -> None:
+    """Print the delta between the current report and the previous snapshot."""
+    delta = _compute_delta(report, previous)
+    ts = previous.get("timestamp", "")
+    date_str = _format_audit_date(ts)
+
+    _console.print(f"  [dim]Last audit: {delta['prev_passing']}/{delta['prev_total']} ({date_str})[/dim]")
+
+    if delta["totals_differ"]:
+        _console.print(f"  [dim](check set changed: was {delta['prev_total']}, now {len(report.items)})[/dim]")
+
+    if delta["newly_passing"] or delta["newly_failing"]:
+        parts = []
+        if delta["newly_passing"]:
+            names = ", ".join(delta["newly_passing"])
+            parts.append(f"[green]+{len(delta['newly_passing'])} ✓[/green]  ({names} now passing)")
+        if delta["newly_failing"]:
+            names = ", ".join(delta["newly_failing"])
+            parts.append(f"[red]-{len(delta['newly_failing'])} ✗[/red]  ({names} now failing)")
+        for part in parts:
+            _console.print(f"  Delta: {part}")
+    else:
+        _console.print("  [dim]No changes since last audit.[/dim]")
 
 
 def print_audit_comparison(report_a: AuditReport, report_b: AuditReport) -> None:
@@ -129,9 +197,9 @@ def print_audit_comparison(report_a: AuditReport, report_b: AuditReport) -> None
     _console.print()
 
 
-def print_audit_json(report: AuditReport) -> None:
+def print_audit_json(report: AuditReport, previous: dict | None = None) -> None:
     """Print audit results as JSON to stdout."""
-    data = {
+    data: dict = {
         "owner": report.owner,
         "repo": report.repo,
         "health_percentage": report.health_percentage,
@@ -151,4 +219,18 @@ def print_audit_json(report: AuditReport) -> None:
             "total": len(report.items),
         },
     }
+
+    if previous is not None:
+        delta = _compute_delta(report, previous)
+        data["previous"] = {
+            "timestamp": previous.get("timestamp"),
+            "passing": delta["prev_passing"],
+            "total": delta["prev_total"],
+        }
+        data["delta"] = {
+            "change": delta["change"],
+            "newly_passing": delta["newly_passing"],
+            "newly_failing": delta["newly_failing"],
+        }
+
     print(json.dumps(data, indent=2))

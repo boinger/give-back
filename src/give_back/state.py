@@ -40,8 +40,11 @@ _SCHEMA_VERSION = 1
 _DEFAULT_CACHE_TTL_HOURS = 24
 
 
+_MAX_AUDIT_HISTORY = 5
+
+
 def _empty_state() -> dict:
-    return {"version": _SCHEMA_VERSION, "assessments": {}, "skip_list": []}
+    return {"version": _SCHEMA_VERSION, "assessments": {}, "skip_list": [], "audit_results": {}}
 
 
 def load_state() -> dict:
@@ -205,6 +208,60 @@ def get_skip_list() -> list[str]:
         return []
 
     return state.get("skip_list", [])
+
+
+def save_audit_result(owner: str, repo: str, snapshot: dict) -> None:
+    """Append an audit snapshot to the capped history for *owner/repo*.
+
+    *snapshot* is a plain dict with at least ``timestamp`` and ``items`` keys.
+    The list is kept to the most recent ``_MAX_AUDIT_HISTORY`` entries.
+    """
+    try:
+        state = load_state()
+    except StateCorruptError:
+        state = _empty_state()
+
+    audits = state.setdefault("audit_results", {})
+    key = f"{owner}/{repo}"
+
+    history = audits.get(key, [])
+    # Handle legacy single-dict format (wrap in list)
+    if isinstance(history, dict):
+        history = [history]
+    if not isinstance(history, list):
+        history = []
+
+    history.append(snapshot)
+    audits[key] = history[-_MAX_AUDIT_HISTORY:]
+
+    save_state(state)
+
+
+def get_previous_audit(owner: str, repo: str) -> dict | None:
+    """Return the most recent stored audit snapshot for *owner/repo*, or None."""
+    try:
+        state = load_state()
+    except StateCorruptError:
+        return None
+
+    key = f"{owner}/{repo}"
+    history = state.get("audit_results", {}).get(key)
+
+    if history is None:
+        return None
+
+    # Handle legacy single-dict format
+    if isinstance(history, dict):
+        history = [history]
+    if not isinstance(history, list) or not history:
+        return None
+
+    entry = history[-1]
+    # Validate minimally: must be a dict with an "items" dict
+    if not isinstance(entry, dict) or not isinstance(entry.get("items"), dict):
+        return None
+
+    return entry
 
 
 def save_discover_cache(query_hash: str, query: str, repos: list[dict]) -> None:

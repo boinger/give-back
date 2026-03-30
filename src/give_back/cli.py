@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import datetime, timezone
 
 import click
 
@@ -1054,6 +1055,7 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
     """
     from give_back.audit import run_audit
     from give_back.output import print_audit, print_audit_comparison, print_audit_json
+    from give_back.state import get_previous_audit, save_audit_result
 
     try:
         owner, repo_name = _parse_repo(repo)
@@ -1083,15 +1085,22 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
                     client, compare_owner, compare_repo, verbose=verbose, conventions=conventions
                 )
                 if json_output:
-                    # For JSON comparison, print both reports
                     print_audit_json(report)
                     print_audit_json(compare_report)
                 else:
                     print_audit_comparison(report, compare_report)
-            elif json_output:
-                print_audit_json(report)
+                # Compare mode is exploratory — don't save baselines
             else:
-                print_audit(report, verbose=verbose)
+                previous = get_previous_audit(owner, repo_name)
+                snapshot = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "items": {item.name: item.passed for item in report.items},
+                }
+                if json_output:
+                    print_audit_json(report, previous=previous)
+                else:
+                    print_audit(report, verbose=verbose, previous=previous)
+                save_audit_result(owner, repo_name, snapshot)
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

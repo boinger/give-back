@@ -13,12 +13,14 @@ from give_back.state import (
     _parse_config_yaml,
     add_to_skip_list,
     get_cached_assessment,
+    get_previous_audit,
     get_skip_list,
     load_config,
     load_state,
     reconstruct_assessment,
     remove_from_skip_list,
     save_assessment,
+    save_audit_result,
     save_state,
 )
 
@@ -276,3 +278,52 @@ class TestReconstructAssessment:
         cached = {"signals": []}
         with pytest.raises(ValueError):
             reconstruct_assessment(cached, "a", "b")
+
+
+class TestAuditResults:
+    def test_save_and_retrieve(self, state_dir):
+        snapshot = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"license": True, "readme": False}}
+        save_audit_result("pallets", "flask", snapshot)
+
+        result = get_previous_audit("pallets", "flask")
+        assert result is not None
+        assert result["items"]["license"] is True
+        assert result["items"]["readme"] is False
+        assert result["timestamp"] == "2026-03-15T00:00:00+00:00"
+
+    def test_append_and_cap_at_5(self, state_dir):
+        for i in range(7):
+            snapshot = {"timestamp": f"2026-03-{i + 1:02d}T00:00:00+00:00", "items": {"license": i % 2 == 0}}
+            save_audit_result("pallets", "flask", snapshot)
+
+        # Should keep only the last 5
+        _, state_file = state_dir
+        data = json.loads(state_file.read_text())
+        history = data["audit_results"]["pallets/flask"]
+        assert len(history) == 5
+        # Most recent is the last one saved (i=6, March 7)
+        assert history[-1]["timestamp"] == "2026-03-07T00:00:00+00:00"
+        # Oldest kept is i=2 (March 3)
+        assert history[0]["timestamp"] == "2026-03-03T00:00:00+00:00"
+
+    def test_no_previous_returns_none(self, state_dir):
+        assert get_previous_audit("unknown", "repo") is None
+
+    def test_missing_key_handled(self, state_dir):
+        """State file without audit_results key returns None."""
+        _, state_file = state_dir
+        save_state({"version": 1, "assessments": {}, "skip_list": []})
+        assert get_previous_audit("pallets", "flask") is None
+
+    def test_malformed_entry_returns_none(self, state_dir):
+        """Corrupt entry (items is not a dict) returns None."""
+        _, state_file = state_dir
+        save_state(
+            {
+                "version": 1,
+                "assessments": {},
+                "skip_list": [],
+                "audit_results": {"pallets/flask": [{"timestamp": "2026-01-01", "items": "not-a-dict"}]},
+            }
+        )
+        assert get_previous_audit("pallets", "flask") is None

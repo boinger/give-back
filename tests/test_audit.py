@@ -22,6 +22,7 @@ from give_back.audit import (
 from give_back.exceptions import RepoNotFoundError
 from give_back.github_client import GitHubClient
 from give_back.models import RepoData, SignalResult, Tier
+from give_back.output.audit import _compute_delta, _format_audit_date, print_audit_json
 
 _RATE_HEADERS = {
     "X-RateLimit-Remaining": "4999",
@@ -388,3 +389,91 @@ class TestComparison:
         with pytest.raises(RepoNotFoundError):
             run_audit(client, "nonexistent", "repo")
         client.close()
+
+
+def _make_report(*items: tuple[str, str, bool]) -> AuditReport:
+    """Build an AuditReport with the given (name, category, passed) triples."""
+    return AuditReport(
+        owner="test",
+        repo="repo",
+        items=[AuditItem(name=n, category=c, passed=p, message=f"{n} status") for n, c, p in items],
+    )
+
+
+class TestDeltaOutput:
+    def test_delta_positive(self):
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": False, "b": True, "c": False}}
+        report = _make_report(("a", "x", True), ("b", "x", True), ("c", "x", True))
+        delta = _compute_delta(report, previous)
+        assert delta["change"] == 2
+        assert delta["newly_passing"] == ["a", "c"]
+        assert delta["newly_failing"] == []
+
+    def test_delta_negative(self):
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": True, "b": True, "c": True}}
+        report = _make_report(("a", "x", True), ("b", "x", False), ("c", "x", True))
+        delta = _compute_delta(report, previous)
+        assert delta["change"] == -1
+        assert delta["newly_passing"] == []
+        assert delta["newly_failing"] == ["b"]
+
+    def test_delta_unchanged(self):
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": True, "b": False}}
+        report = _make_report(("a", "x", True), ("b", "x", False))
+        delta = _compute_delta(report, previous)
+        assert delta["change"] == 0
+        assert delta["newly_passing"] == []
+        assert delta["newly_failing"] == []
+
+    def test_no_previous_no_delta(self, capsys):
+        """When previous is None, print_audit should not print delta lines."""
+        from give_back.output.audit import print_audit
+
+        report = _make_report(("a", "community_health", True))
+        print_audit(report, previous=None)
+        captured = capsys.readouterr()
+        assert "Last audit" not in captured.out
+        assert "Delta" not in captured.out
+
+    def test_delta_mismatched_items(self):
+        """Items only in one set are excluded from delta (conventions toggle)."""
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": True, "b": False}}
+        # Current has a, b, c — c is new, only a and b compared
+        report = _make_report(("a", "x", True), ("b", "x", True), ("c", "x", True))
+        delta = _compute_delta(report, previous)
+        assert delta["newly_passing"] == ["b"]
+        assert "c" not in delta["newly_passing"]
+
+    def test_delta_total_changed(self):
+        """When totals differ, totals_differ flag is set."""
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": True, "b": True}}
+        report = _make_report(("a", "x", True), ("b", "x", True), ("c", "x", False))
+        delta = _compute_delta(report, previous)
+        assert delta["totals_differ"] is True
+        assert delta["prev_total"] == 2
+
+    def test_delta_json(self, capsys):
+        """JSON output includes previous and delta keys when previous is given."""
+        import json
+
+        previous = {"timestamp": "2026-03-15T00:00:00+00:00", "items": {"a": False, "b": True}}
+        report = _make_report(("a", "x", True), ("b", "x", True))
+        print_audit_json(report, previous=previous)
+        data = json.loads(capsys.readouterr().out)
+        assert "previous" in data
+        assert data["previous"]["passing"] == 1
+        assert data["delta"]["change"] == 1
+        assert data["delta"]["newly_passing"] == ["a"]
+
+    def test_format_date_same_year(self):
+        from datetime import datetime, timezone
+
+        ts = datetime.now(timezone.utc).replace(month=3, day=15).isoformat()
+        result = _format_audit_date(ts)
+        assert "March 15" in result
+        # Should NOT include the year when same year
+        assert str(datetime.now(timezone.utc).year) not in result
+
+    def test_format_date_different_year(self):
+        result = _format_audit_date("2020-06-01T00:00:00+00:00")
+        assert "June 1, 2020" in result
