@@ -1039,11 +1039,14 @@ def status(json_output: bool, verbose: bool, workspace_dir: str | None) -> None:
 @click.option("--verbose", "-v", is_flag=True, help="Show signal details (scores, sample sizes).")
 @click.option("--conventions", is_flag=True, help="Also scan contribution conventions (clones the repo, slower).")
 @click.option("--compare", default=None, help="Compare against another repo side-by-side.")
-def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compare: str | None) -> None:
+@click.option("--fix", "fix_mode", is_flag=True, help="Interactively fix failing checks.")
+def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compare: str | None, fix_mode: bool) -> None:
     """Audit a repo's contributor-friendliness for maintainers.
 
     Produces a checklist of community health files, templates, labels, and
     viability signals with actionable recommendations for each failing item.
+
+    Use --fix to interactively generate missing files and create labels.
 
     Examples:
 
@@ -1052,10 +1055,22 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
         give-back audit pallets/flask --compare django/django
 
         give-back audit pallets/flask --conventions
+
+        give-back audit pallets/flask --fix
     """
     from give_back.audit import run_audit
     from give_back.output import print_audit, print_audit_comparison, print_audit_json
     from give_back.state import get_previous_audit, save_audit_result
+
+    if fix_mode and compare:
+        _console.print("[red]Error:[/red] --fix and --compare are mutually exclusive.")
+        sys.exit(1)
+    if fix_mode and json_output:
+        _console.print("[red]Error:[/red] --fix and --json are mutually exclusive (fix mode is interactive).")
+        sys.exit(1)
+    if fix_mode and not sys.stdin.isatty():
+        _console.print("[red]Error:[/red] --fix requires an interactive terminal.")
+        sys.exit(1)
 
     try:
         owner, repo_name = _parse_repo(repo)
@@ -1101,6 +1116,22 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
                 else:
                     print_audit(report, verbose=verbose, previous=previous)
                 save_audit_result(owner, repo_name, snapshot)
+
+            # --fix: interactive walkthrough for failing checks
+            if fix_mode:
+                from give_back.audit_fix.fix import print_fix_summary, resolve_repo_dir, walk_fixes
+
+                has_failures = any(not item.passed for item in report.items)
+                if not has_failures:
+                    _console.print("\n  [green]Nothing to fix![/green]")
+                else:
+                    repo_dir = resolve_repo_dir(owner, repo_name)
+                    if repo_dir is not None:
+                        try:
+                            summary = walk_fixes(report, repo_dir, client)
+                            print_fix_summary(summary)
+                        except click.Abort:
+                            _console.print("\n  Interrupted.")
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

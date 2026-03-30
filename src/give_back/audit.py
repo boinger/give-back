@@ -39,6 +39,9 @@ class AuditItem:
     recommendation: str | None = None
     """What to do if failing (None if passing)."""
 
+    metadata: dict | None = None
+    """Optional structured data for fix handlers (e.g. missing label names)."""
+
 
 @dataclass
 class AuditReport:
@@ -185,6 +188,9 @@ def _check_issue_templates(client: GitHubClient, owner: str, repo: str) -> Audit
 _CONTRIBUTION_LABELS = {"good first issue", "good-first-issue", "help wanted", "help-wanted"}
 
 
+_CANONICAL_LABELS = {"good first issue", "help wanted"}
+
+
 def _check_labels(label_names: list[str]) -> AuditItem:
     """Check for contribution-friendly labels."""
     lower_names = {n.lower() for n in label_names}
@@ -192,12 +198,18 @@ def _check_labels(label_names: list[str]) -> AuditItem:
     if found:
         display = ", ".join(sorted(found))
         return AuditItem(name="labels", category="labels", passed=True, message=f"Labels: {display}")
+
+    # Determine which canonical labels are missing (for --fix)
+    present_canonical = {c for c in _CANONICAL_LABELS if c in lower_names or c.replace(" ", "-") in lower_names}
+    missing = sorted(_CANONICAL_LABELS - present_canonical)
+
     return AuditItem(
         name="labels",
         category="labels",
         passed=False,
         message="No contribution-friendly labels",
         recommendation="Create 'good first issue' and 'help wanted' labels to guide new contributors.",
+        metadata={"missing": missing},
     )
 
 

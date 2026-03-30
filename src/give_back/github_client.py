@@ -111,6 +111,16 @@ class GitHubClient:
         response = self._request_with_retry("GET", path, params=params)
         return response.json()
 
+    def rest_post(self, path: str, json: dict | None = None) -> dict:
+        """POST to a REST API endpoint. Returns parsed JSON.
+
+        Raises:
+            AuthenticationError: On 401.
+            RateLimitError: On 403 with rate limit headers.
+        """
+        response = self._request_with_retry("POST", path, json=json)
+        return response.json()
+
     def search(self, query: str) -> dict:
         """Execute a search API query. Returns parsed JSON.
 

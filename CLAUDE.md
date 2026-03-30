@@ -33,7 +33,8 @@ CLI (cli.py)
   ├── status ──► scan workspaces → refresh PR state → display
   │     └── status.py ──► context.json files + GitHub API → contribution list
   ├── audit ──► community profile + templates + labels + signals → checklist
-  │     └── audit.py ──► fetch_repo_data → health checks + evaluate_signals → report
+  │     ├── audit.py ──► fetch_repo_data → health checks + evaluate_signals → report
+  │     └── audit_fix/ ──► --fix: interactive walkthrough → generate files + create labels
   ├── prepare/lifecycle.py ──► workspace state machine (working → pr_open → merged)
   ├── auth.py ──► GITHUB_TOKEN / gh CLI / unauthenticated
   ├── github_client.py ──► httpx ──► GitHub API (GraphQL + REST)
@@ -82,6 +83,7 @@ make run ARGS='discover --language python' # find repos to contribute to
 make run ARGS='submit'                    # create PR from workspace
 make run ARGS='status'                    # check contribution status
 make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist
+make run ARGS='audit pallets/flask --fix' # interactively fix failing checks
 ```
 
 ## Key Files
@@ -104,3 +106,8 @@ make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist
 | `src/give_back/submit.py` | PR creation from workspace context |
 | `src/give_back/status.py` | Contribution tracking across repos |
 | `src/give_back/audit.py` | Maintainer self-assessment checklist |
+| `src/give_back/audit_fix/fix.py` | --fix orchestrator: resolve repo, walk fixes, summary |
+| `src/give_back/audit_fix/templates.py` | Template content + write_if_missing utility |
+| `src/give_back/audit_fix/license.py` | License quick-pick (GitHub Licenses API) |
+| `src/give_back/audit_fix/contributing.py` | CONTRIBUTING.md section wizard |
+| `src/give_back/audit_fix/labels.py` | Label creation via REST API |
