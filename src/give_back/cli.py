@@ -1034,7 +1034,7 @@ def status(json_output: bool, verbose: bool, workspace_dir: str | None) -> None:
 
 
 @cli.command()
-@click.argument("repo")
+@click.argument("repo", required=False, default=None)
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
 @click.option("--verbose", "-v", is_flag=True, help="Show signal details (scores, sample sizes).")
 @click.option("--conventions", is_flag=True, help="Also scan contribution conventions (clones the repo, slower).")
@@ -1046,8 +1046,11 @@ def status(json_output: bool, verbose: bool, workspace_dir: str | None) -> None:
 @click.option(
     "--template-dir", default=None, type=click.Path(exists=True), help="Use templates from a local directory."
 )
+@click.option("--mine", is_flag=True, help="Audit your own repos (public, non-archived, sorted by activity).")
+@click.option("--include-all", is_flag=True, help="With --mine: include private, archived, and forked repos.")
+@click.option("--limit", "mine_limit", default=20, show_default=True, help="With --mine: max repos to audit.")
 def audit(
-    repo: str,
+    repo: str | None,
     json_output: bool,
     verbose: bool,
     conventions: bool,
@@ -1055,6 +1058,9 @@ def audit(
     fix_mode: bool,
     template_repo: str | None,
     template_dir: str | None,
+    mine: bool,
+    include_all: bool,
+    mine_limit: int,
 ) -> None:
     """Audit a repo's contributor-friendliness for maintainers.
 
@@ -1063,6 +1069,7 @@ def audit(
 
     Use --fix to interactively generate missing files and create labels.
     Use --template-repo or --template-dir to provide custom templates.
+    Use --mine to batch-audit your own repos.
 
     Examples:
 
@@ -1075,11 +1082,28 @@ def audit(
         give-back audit pallets/flask --fix
 
         give-back audit pallets/flask --fix --template-repo myorg/standards
+
+        give-back audit --mine
+
+        give-back audit --mine --limit 10
     """
     from give_back.audit import run_audit
     from give_back.output import print_audit, print_audit_comparison, print_audit_json
     from give_back.state import get_previous_audit, save_audit_result
 
+    # --- Validation ---
+    if mine and repo:
+        _console.print("[red]Error:[/red] --mine does not take a REPO argument.")
+        sys.exit(1)
+    if not mine and not repo:
+        _console.print("[red]Error:[/red] Please provide a REPO argument or use --mine.")
+        sys.exit(1)
+    if mine and (fix_mode or compare or conventions or json_output):
+        _console.print("[red]Error:[/red] --mine cannot be combined with --fix, --compare, --conventions, or --json.")
+        sys.exit(1)
+    if (include_all or mine_limit != 20) and not mine:
+        _console.print("[red]Error:[/red] --include-all and --limit require --mine.")
+        sys.exit(1)
     if fix_mode and compare:
         _console.print("[red]Error:[/red] --fix and --compare are mutually exclusive.")
         sys.exit(1)
@@ -1095,6 +1119,36 @@ def audit(
     if fix_mode and not sys.stdin.isatty():
         _console.print("[red]Error:[/red] --fix requires an interactive terminal.")
         sys.exit(1)
+
+    # --- Batch mode: --mine ---
+    if mine:
+        from give_back.audit_mine import fetch_user_repos, print_batch_results, run_batch_audit
+
+        token = resolve_token()
+        if not token:
+            _console.print("[red]Error:[/red] --mine requires authentication. Set GITHUB_TOKEN or install gh CLI.")
+            sys.exit(1)
+
+        try:
+            with GitHubClient(token=token) as client:
+                _console.print("\n  Fetching your repos...")
+                repos = fetch_user_repos(client, include_all=include_all)
+                if not repos:
+                    _console.print("  No repos found.")
+                    return
+                _console.print(f"  Found {len(repos)} repos, auditing top {min(mine_limit, len(repos))}...\n")
+                results = run_batch_audit(client, repos, limit=mine_limit)
+                print_batch_results(results)
+        except AuthenticationError as exc:
+            _console.print(f"[red]Error:[/red] {exc}")
+            sys.exit(1)
+        except RateLimitError as exc:
+            _console.print(f"[red]Error:[/red] {exc}")
+            sys.exit(1)
+        return
+
+    # --- Single repo mode ---
+    assert repo is not None  # validated above
 
     try:
         owner, repo_name = _parse_repo(repo)

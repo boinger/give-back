@@ -34,7 +34,8 @@ CLI (cli.py)
   │     └── status.py ──► context.json files + GitHub API → contribution list
   ├── audit ──► community profile + templates + labels + signals → checklist
   │     ├── audit.py ──► fetch_repo_data → health checks + evaluate_signals → report
-  │     └── audit_fix/ ──► --fix: interactive walkthrough → generate files + create labels
+  │     ├── audit_fix/ ──► --fix: interactive walkthrough → generate files + create labels
+  │     └── audit_mine.py ──► --mine: batch-audit user's repos → ranked table
   ├── prepare/lifecycle.py ──► workspace state machine (working → pr_open → merged)
   ├── auth.py ──► GITHUB_TOKEN / gh CLI / unauthenticated
   ├── github_client.py ──► httpx ──► GitHub API (GraphQL + REST)
@@ -86,6 +87,8 @@ make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist
 make run ARGS='audit pallets/flask --fix' # interactively fix failing checks
 make run ARGS='audit pallets/flask --fix --template-repo myorg/standards'  # custom templates from repo
 make run ARGS='audit pallets/flask --fix --template-dir ./templates'       # custom templates from local dir
+make run ARGS='audit --mine'              # batch-audit your repos (top 20 by activity)
+make run ARGS='audit --mine --limit 10'   # audit top 10 repos
 ```
 
 ## Key Files
@@ -114,3 +117,4 @@ make run ARGS='audit pallets/flask --fix --template-dir ./templates'       # cus
 | `src/give_back/audit_fix/contributing.py` | CONTRIBUTING.md section wizard |
 | `src/give_back/audit_fix/labels.py` | Label creation via REST API |
 | `src/give_back/audit_fix/resolver.py` | Template resolver (built-in / local dir / remote repo) |
+| `src/give_back/audit_mine.py` | Batch audit across user's repos (--mine) |
