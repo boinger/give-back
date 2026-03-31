@@ -1040,13 +1040,29 @@ def status(json_output: bool, verbose: bool, workspace_dir: str | None) -> None:
 @click.option("--conventions", is_flag=True, help="Also scan contribution conventions (clones the repo, slower).")
 @click.option("--compare", default=None, help="Compare against another repo side-by-side.")
 @click.option("--fix", "fix_mode", is_flag=True, help="Interactively fix failing checks.")
-def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compare: str | None, fix_mode: bool) -> None:
+@click.option(
+    "--template-repo", default=None, help="Use community health files from this repo as templates (owner/repo)."
+)
+@click.option(
+    "--template-dir", default=None, type=click.Path(exists=True), help="Use templates from a local directory."
+)
+def audit(
+    repo: str,
+    json_output: bool,
+    verbose: bool,
+    conventions: bool,
+    compare: str | None,
+    fix_mode: bool,
+    template_repo: str | None,
+    template_dir: str | None,
+) -> None:
     """Audit a repo's contributor-friendliness for maintainers.
 
     Produces a checklist of community health files, templates, labels, and
     viability signals with actionable recommendations for each failing item.
 
     Use --fix to interactively generate missing files and create labels.
+    Use --template-repo or --template-dir to provide custom templates.
 
     Examples:
 
@@ -1057,6 +1073,8 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
         give-back audit pallets/flask --conventions
 
         give-back audit pallets/flask --fix
+
+        give-back audit pallets/flask --fix --template-repo myorg/standards
     """
     from give_back.audit import run_audit
     from give_back.output import print_audit, print_audit_comparison, print_audit_json
@@ -1067,6 +1085,12 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
         sys.exit(1)
     if fix_mode and json_output:
         _console.print("[red]Error:[/red] --fix and --json are mutually exclusive (fix mode is interactive).")
+        sys.exit(1)
+    if (template_repo or template_dir) and not fix_mode:
+        _console.print("[red]Error:[/red] --template-repo and --template-dir require --fix.")
+        sys.exit(1)
+    if template_repo and template_dir:
+        _console.print("[red]Error:[/red] --template-repo and --template-dir are mutually exclusive.")
         sys.exit(1)
     if fix_mode and not sys.stdin.isatty():
         _console.print("[red]Error:[/red] --fix requires an interactive terminal.")
@@ -1119,7 +1143,16 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
 
             # --fix: interactive walkthrough for failing checks
             if fix_mode:
+                from pathlib import Path
+
                 from give_back.audit_fix.fix import print_fix_summary, resolve_repo_dir, walk_fixes
+                from give_back.audit_fix.resolver import TemplateResolver
+
+                resolver = TemplateResolver(
+                    template_dir=Path(template_dir) if template_dir else None,
+                    template_repo=template_repo,
+                    client=client,
+                )
 
                 has_failures = any(not item.passed for item in report.items)
                 if not has_failures:
@@ -1128,7 +1161,7 @@ def audit(repo: str, json_output: bool, verbose: bool, conventions: bool, compar
                     repo_dir = resolve_repo_dir(owner, repo_name)
                     if repo_dir is not None:
                         try:
-                            summary = walk_fixes(report, repo_dir, client)
+                            summary = walk_fixes(report, repo_dir, client, resolver=resolver)
                             print_fix_summary(summary)
                         except click.Abort:
                             _console.print("\n  Interrupted.")

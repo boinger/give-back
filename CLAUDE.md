@@ -84,6 +84,8 @@ make run ARGS='submit'                    # create PR from workspace
 make run ARGS='status'                    # check contribution status
 make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist
 make run ARGS='audit pallets/flask --fix' # interactively fix failing checks
+make run ARGS='audit pallets/flask --fix --template-repo myorg/standards'  # custom templates from repo
+make run ARGS='audit pallets/flask --fix --template-dir ./templates'       # custom templates from local dir
 ```
 
 ## Key Files
@@ -111,3 +113,4 @@ make run ARGS='audit pallets/flask --fix' # interactively fix failing checks
 | `src/give_back/audit_fix/license.py` | License quick-pick (GitHub Licenses API) |
 | `src/give_back/audit_fix/contributing.py` | CONTRIBUTING.md section wizard |
 | `src/give_back/audit_fix/labels.py` | Label creation via REST API |
+| `src/give_back/audit_fix/resolver.py` | Template resolver (built-in / local dir / remote repo) |

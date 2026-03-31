@@ -26,23 +26,3 @@ of repos audited recently.
 
 **Effort:** M. **Priority:** P3. **Depends on:** audit + audit progress tracking (done).
 
-## Custom templates for `audit --fix` (`--template-repo` / `--template-dir`)
-
-Let users provide their own community health file templates instead of the
-built-in defaults. Two modes:
-
-**Reference repo (`--template-repo owner/repo`):** Fetch community health
-files from another GitHub repo and use them as templates. Find-and-replace
-the source repo's owner/name with the target repo. Good for orgs that want
-consistency across repos: set up one "gold standard" repo and replicate it.
-
-**Local template dir (`--template-dir path/`):** Read templates from a local
-directory. Same file names as the generated files (CODE_OF_CONDUCT.md,
-SECURITY.md, .github/PULL_REQUEST_TEMPLATE.md, etc.). Files present in
-the directory override the built-in defaults; missing files fall back to
-built-ins.
-
-Both modes use `{owner}` and `{repo}` placeholders in template content,
-replaced at generation time.
-
-**Effort:** M. **Priority:** P3. **Depends on:** audit --fix (done).

@@ -13,15 +13,8 @@ from give_back.audit import AuditReport
 from give_back.audit_fix.contributing import run_wizard
 from give_back.audit_fix.labels import create_labels
 from give_back.audit_fix.license import pick_license
-from give_back.audit_fix.templates import (
-    BUG_REPORT_YML,
-    CODE_OF_CONDUCT,
-    CONFIG_YML,
-    FEATURE_REQUEST_YML,
-    PR_TEMPLATE,
-    SECURITY,
-    write_file,
-)
+from give_back.audit_fix.resolver import TemplateResolver
+from give_back.audit_fix.templates import write_file
 from give_back.github_client import GitHubClient
 
 _SSH_PATTERN = re.compile(r"git@[^:]+:(.+?)(?:\.git)?$")
@@ -143,34 +136,31 @@ def resolve_repo_dir(owner: str, repo: str) -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def _fix_safe_defaults(report: AuditReport, repo_dir: Path, summary: FixSummary) -> None:
+def _fix_safe_defaults(report: AuditReport, repo_dir: Path, summary: FixSummary, resolver: TemplateResolver) -> None:
     """Batch-fix missing community health files and templates with a single confirm."""
     owner, repo = report.owner, report.repo
     items = {item.name: item for item in report.items if item.category in ("community_health", "templates")}
 
+    # Map audit check names to template keys (relative paths)
+    check_to_templates: dict[str, list[str]] = {
+        "code_of_conduct": ["CODE_OF_CONDUCT.md"],
+        "security": ["SECURITY.md"],
+        "pr_template": [".github/PULL_REQUEST_TEMPLATE.md"],
+        "issue_templates": [
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            ".github/ISSUE_TEMPLATE/feature_request.yml",
+            ".github/ISSUE_TEMPLATE/config.yml",
+        ],
+    }
+
     # Collect all missing safe-default files (exclude license + contributing, handled by wizards)
     pending: list[tuple[Path, str, str]] = []
 
-    if "code_of_conduct" in items and not items["code_of_conduct"].passed:
-        content = CODE_OF_CONDUCT.format(owner=owner, repo=repo)
-        pending.append((repo_dir / "CODE_OF_CONDUCT.md", content, "CODE_OF_CONDUCT.md"))
-
-    if "security" in items and not items["security"].passed:
-        content = SECURITY.format(owner=owner, repo=repo)
-        pending.append((repo_dir / "SECURITY.md", content, "SECURITY.md"))
-
-    if "pr_template" in items and not items["pr_template"].passed:
-        pending.append(
-            (repo_dir / ".github" / "PULL_REQUEST_TEMPLATE.md", PR_TEMPLATE, ".github/PULL_REQUEST_TEMPLATE.md")
-        )
-
-    if "issue_templates" in items and not items["issue_templates"].passed:
-        template_dir = repo_dir / ".github" / "ISSUE_TEMPLATE"
-        pending.append((template_dir / "bug_report.yml", BUG_REPORT_YML, ".github/ISSUE_TEMPLATE/bug_report.yml"))
-        pending.append(
-            (template_dir / "feature_request.yml", FEATURE_REQUEST_YML, ".github/ISSUE_TEMPLATE/feature_request.yml")
-        )
-        pending.append((template_dir / "config.yml", CONFIG_YML, ".github/ISSUE_TEMPLATE/config.yml"))
+    for check_name, template_keys in check_to_templates.items():
+        if check_name in items and not items[check_name].passed:
+            for key in template_keys:
+                content = resolver.get(key, owner, repo)
+                pending.append((repo_dir / key, content, key))
 
     # Filter out files that already exist
     pending = [(p, c, lbl) for p, c, lbl in pending if not p.exists()]
@@ -307,8 +297,16 @@ def _fix_labels(report: AuditReport, client: GitHubClient, summary: FixSummary) 
 _FIXABLE_CATEGORIES = {"community_health", "templates", "labels"}
 
 
-def walk_fixes(report: AuditReport, repo_dir: Path, client: GitHubClient) -> FixSummary:
+def walk_fixes(
+    report: AuditReport,
+    repo_dir: Path,
+    client: GitHubClient,
+    resolver: TemplateResolver | None = None,
+) -> FixSummary:
     """Walk through failing audit checks and offer fixes interactively."""
+    if resolver is None:
+        resolver = TemplateResolver()
+
     summary = FixSummary()
 
     failing = [item for item in report.items if not item.passed]
@@ -316,13 +314,16 @@ def walk_fixes(report: AuditReport, repo_dir: Path, client: GitHubClient) -> Fix
         click.echo("\n  Nothing to fix!")
         return summary
 
+    if resolver.is_custom:
+        click.echo(f"  Using templates from: {resolver.source_label}")
+
     click.echo()
     click.echo("  Fixing failing checks...")
     click.echo()
 
     # Safe defaults: community health files + templates (single batch confirm)
     try:
-        _fix_safe_defaults(report, repo_dir, summary)
+        _fix_safe_defaults(report, repo_dir, summary, resolver)
     except click.Abort:
         raise
     except Exception as exc:
