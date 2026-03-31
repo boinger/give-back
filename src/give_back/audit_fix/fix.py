@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import click
+import httpx
 
 from give_back.audit import AuditReport
 from give_back.audit_fix.contributing import run_wizard
@@ -15,6 +16,7 @@ from give_back.audit_fix.labels import create_labels
 from give_back.audit_fix.license import pick_license
 from give_back.audit_fix.resolver import TemplateResolver
 from give_back.audit_fix.templates import write_file
+from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
 _SSH_PATTERN = re.compile(r"git@[^:]+:(.+?)(?:\.git)?$")
@@ -326,7 +328,7 @@ def walk_fixes(
         _fix_safe_defaults(report, repo_dir, summary, resolver)
     except click.Abort:
         raise
-    except Exception as exc:
+    except (GiveBackError, OSError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         click.echo(f"  Error fixing community health files: {exc}")
 
     # License (interactive picker)
@@ -334,7 +336,7 @@ def walk_fixes(
         _fix_license(report, repo_dir, client, summary)
     except click.Abort:
         raise
-    except Exception as exc:
+    except (GiveBackError, OSError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         click.echo(f"  Error with license picker: {exc}")
 
     # Contributing (interactive wizard)
@@ -342,7 +344,7 @@ def walk_fixes(
         _fix_contributing(report, repo_dir, summary)
     except click.Abort:
         raise
-    except Exception as exc:
+    except (GiveBackError, OSError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         click.echo(f"  Error with CONTRIBUTING wizard: {exc}")
 
     # Labels (remote API)
@@ -350,7 +352,7 @@ def walk_fixes(
         _fix_labels(report, client, summary)
     except click.Abort:
         raise
-    except Exception as exc:
+    except (GiveBackError, OSError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         click.echo(f"  Error creating labels: {exc}")
 
     # Track skipped items

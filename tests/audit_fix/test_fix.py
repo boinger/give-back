@@ -85,11 +85,33 @@ class TestWalkFixes:
         client = MagicMock()
 
         with (
-            patch("give_back.audit_fix.fix._fix_safe_defaults", side_effect=RuntimeError("boom")),
+            patch("give_back.audit_fix.fix._fix_safe_defaults", side_effect=OSError("boom")),
             patch("give_back.audit_fix.fix._fix_contributing") as mock_contributing,
         ):
             walk_fixes(report, tmp_path, client)
             mock_contributing.assert_called_once()
+
+    def test_programming_error_propagates(self, tmp_path):
+        """TypeError (programming error) should NOT be swallowed after narrowing handlers."""
+        report = AuditReport(
+            owner="user",
+            repo="repo",
+            items=[
+                AuditItem(name="code_of_conduct", category="community_health", passed=False, message="missing"),
+            ],
+        )
+        client = MagicMock()
+
+        with (
+            patch("give_back.audit_fix.fix._fix_safe_defaults", side_effect=TypeError("simulated bug")),
+            patch("give_back.audit_fix.fix._fix_license"),
+            patch("give_back.audit_fix.fix._fix_contributing"),
+            patch("give_back.audit_fix.fix._fix_labels"),
+        ):
+            import pytest
+
+            with pytest.raises(TypeError, match="simulated bug"):
+                walk_fixes(report, tmp_path, client)
 
     def test_fix_summary_dataclass(self):
         s = FixSummary()

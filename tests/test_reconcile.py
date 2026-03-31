@@ -1,10 +1,15 @@
 """Tests for reconcile.py bias detection and adjustment."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from give_back.models import SignalResult, SignalWeight, Tier
-from give_back.reconcile import _check_author_transition, should_reconcile
+from give_back.reconcile import (
+    _check_author_transition,
+    _get_collaborator_authors,
+    reconcile_merge_rate,
+    should_reconcile,
+)
 
 
 def _result(score: float, skip: bool = False) -> SignalResult:
@@ -165,3 +170,106 @@ class TestCheckAuthorTransition:
             ]
         }
         assert _check_author_transition(client, "org", "repo", "alice") == 1
+
+
+class TestGetCollaboratorAuthors:
+    def test_extracts_from_collaborator_prs(self):
+        """Extracts unique author logins from details."""
+        result = SignalResult(
+            score=0.2,
+            tier=Tier.RED,
+            summary="test",
+            details={"collaborator_prs": ["alice", "bob", "alice"]},
+        )
+        authors = _get_collaborator_authors(result)
+        assert authors == ["alice", "bob"]
+
+    def test_empty_list(self):
+        result = SignalResult(score=0.2, tier=Tier.RED, summary="test", details={"collaborator_prs": []})
+        assert _get_collaborator_authors(result) == []
+
+    def test_missing_key(self):
+        result = SignalResult(score=0.2, tier=Tier.RED, summary="test", details={})
+        assert _get_collaborator_authors(result) == []
+
+    def test_count_without_names_returns_empty(self):
+        """If we have a count but no names, can't investigate."""
+        result = SignalResult(score=0.2, tier=Tier.RED, summary="test", details={"collaborator_pr_count": 5})
+        assert _get_collaborator_authors(result) == []
+
+
+class TestReconcileMergeRate:
+    def _make_original_result(self, collaborator_prs=None):
+        return SignalResult(
+            score=0.2,
+            tier=Tier.RED,
+            summary="20% of external PRs merged",
+            details={
+                "external_merged": 2,
+                "external_closed": 10,
+                "collaborator_prs": collaborator_prs or [],
+            },
+        )
+
+    def test_adjustment_applied(self):
+        """When transitions found, score is adjusted upward."""
+        original = self._make_original_result(collaborator_prs=["alice"])
+        client = MagicMock()
+
+        with patch(
+            "give_back.reconcile._check_author_transition",
+            return_value=3,
+        ):
+            result = reconcile_merge_rate(client, "org", "repo", original)
+
+        assert result is not None
+        assert result.score > original.score
+        assert result.details["adjusted"] is True
+        assert result.details["transitioned_authors"] == ["alice"]
+        assert result.details["transitioned_pr_count"] == 3
+        assert "adjusted" in result.summary.lower()
+
+    def test_no_collaborator_authors(self):
+        """No collaborator authors → no adjustment."""
+        original = SignalResult(
+            score=0.2, tier=Tier.RED, summary="test", details={"external_merged": 2, "external_closed": 10}
+        )
+        result = reconcile_merge_rate(MagicMock(), "org", "repo", original)
+        assert result is None
+
+    def test_no_transitions_found(self):
+        """Authors checked but no transitions detected → no adjustment."""
+        original = self._make_original_result(collaborator_prs=["alice"])
+        client = MagicMock()
+
+        with patch("give_back.reconcile._check_author_transition", return_value=0):
+            result = reconcile_merge_rate(client, "org", "repo", original)
+
+        assert result is None
+
+    def test_verbose_output(self, capsys):
+        """Verbose mode prints investigation progress."""
+        original = self._make_original_result(collaborator_prs=["alice"])
+        client = MagicMock()
+
+        with patch("give_back.reconcile._check_author_transition", return_value=2):
+            reconcile_merge_rate(client, "org", "repo", original, verbose=True)
+
+        output = capsys.readouterr().err
+        assert "Investigating" in output or "role transitions" in output
+
+    def test_limits_authors_investigated(self):
+        """Only investigates up to _MAX_AUTHORS_TO_INVESTIGATE authors."""
+        original = self._make_original_result(collaborator_prs=[f"user{i}" for i in range(20)])
+        client = MagicMock()
+        call_count = 0
+
+        def count_calls(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return 0
+
+        with patch("give_back.reconcile._check_author_transition", side_effect=count_calls):
+            reconcile_merge_rate(client, "org", "repo", original)
+
+        assert call_count == 5  # _MAX_AUTHORS_TO_INVESTIGATE

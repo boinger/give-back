@@ -6,6 +6,7 @@ import respx
 
 from give_back.exceptions import (
     AuthenticationError,
+    GiveBackError,
     GraphQLError,
     RateLimitError,
     RepoNotFoundError,
@@ -160,6 +161,53 @@ class TestRetry:
         respx.post("https://api.github.com/graphql").mock(side_effect=httpx.TimeoutException("timeout"))
         with pytest.raises(httpx.TimeoutException):
             client.graphql("query { repository { name } }")
+
+
+class TestUnhandledStatusCodes:
+    """Verify that HTTP status codes not explicitly handled (500, 502, 422) raise GiveBackError."""
+
+    @respx.mock
+    def test_500_raises_giveback_error(self, client):
+        respx.get("https://api.github.com/repos/test/repo").mock(
+            return_value=httpx.Response(500, text="Internal Server Error")
+        )
+        with pytest.raises(GiveBackError, match="500"):
+            client.rest_get("/repos/test/repo")
+
+    @respx.mock
+    def test_502_raises_giveback_error(self, client):
+        respx.get("https://api.github.com/repos/test/repo").mock(return_value=httpx.Response(502, text="Bad Gateway"))
+        with pytest.raises(GiveBackError, match="502"):
+            client.rest_get("/repos/test/repo")
+
+    @respx.mock
+    def test_422_raises_giveback_error(self, client):
+        respx.get("https://api.github.com/repos/test/repo").mock(
+            return_value=httpx.Response(422, json={"message": "Validation Failed"})
+        )
+        with pytest.raises(GiveBackError, match="422"):
+            client.rest_get("/repos/test/repo")
+
+    @respx.mock
+    def test_error_message_includes_url(self, client):
+        respx.get("https://api.github.com/repos/test/repo").mock(
+            return_value=httpx.Response(500, text="Internal Server Error")
+        )
+        with pytest.raises(GiveBackError, match="repos/test/repo"):
+            client.rest_get("/repos/test/repo")
+
+    @respx.mock
+    def test_200_not_affected(self, client):
+        """Regression: 2xx responses must not raise."""
+        respx.get("https://api.github.com/repos/test/repo").mock(
+            return_value=httpx.Response(
+                200,
+                json={"name": "repo"},
+                headers={"X-RateLimit-Remaining": "4999", "X-RateLimit-Limit": "5000", "X-RateLimit-Reset": "9999999"},
+            )
+        )
+        result = client.rest_get("/repos/test/repo")
+        assert result["name"] == "repo"
 
 
 class TestClientAuth:

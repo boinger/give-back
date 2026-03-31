@@ -55,6 +55,7 @@ def setup_workspace(
             capture_output=True,
             text=True,
             cwd=clone_dir,
+            timeout=30,
         )
         if result.returncode != 0:
             raise WorkspaceError(
@@ -106,6 +107,7 @@ def setup_workspace(
             capture_output=True,
             text=True,
             cwd=clone_dir,
+            timeout=30,
         )
         if result.returncode != 0:
             raise WorkspaceError(f"Failed to add upstream remote: {result.stderr.strip()}")
@@ -129,6 +131,7 @@ def setup_workspace(
         capture_output=True,
         text=True,
         cwd=clone_dir,
+        timeout=30,
     )
     branch_exists = bool(result.stdout.strip())
 
@@ -139,17 +142,24 @@ def setup_workspace(
             capture_output=True,
             text=True,
             cwd=clone_dir,
+            timeout=30,
         )
         if result.stdout.strip():
             raise WorkspaceError("Branch has uncommitted changes — commit or stash first")
 
-        subprocess.run(
-            ["git", "checkout", branch_name],
-            capture_output=True,
-            text=True,
-            cwd=clone_dir,
-            check=True,
-        )
+        try:
+            subprocess.run(
+                ["git", "checkout", branch_name],
+                capture_output=True,
+                text=True,
+                cwd=clone_dir,
+                check=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            raise WorkspaceError("git checkout timed out after 30s")
+        except subprocess.CalledProcessError as exc:
+            raise WorkspaceError(f"git checkout failed: {exc.stderr.strip() if exc.stderr else exc}") from exc
         try:
             result = subprocess.run(
                 ["git", "pull", "--rebase", f"upstream/{default_branch}"],
@@ -168,6 +178,7 @@ def setup_workspace(
             capture_output=True,
             text=True,
             cwd=clone_dir,
+            timeout=30,
         )
         if result.returncode != 0:
             raise WorkspaceError(f"Branch creation failed: {result.stderr.strip()}")

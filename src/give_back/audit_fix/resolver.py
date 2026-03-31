@@ -101,7 +101,8 @@ class TemplateResolver:
 
     def _get_from_dir(self, key: str) -> str:
         """Read template from local directory, fall back to built-in."""
-        assert self._template_dir is not None
+        if self._template_dir is None:
+            raise ValueError("_get_from_dir called without template_dir set")
         path = self._template_dir / key
         if path.is_file():
             return path.read_text()
@@ -115,9 +116,10 @@ class TemplateResolver:
                 return cached
             return self._get_builtin(key)
 
-        assert self._client is not None
-        assert self._source_owner is not None
-        assert self._source_repo is not None
+        if self._client is None:
+            raise ValueError("_get_from_repo called without client set")
+        if self._source_owner is None or self._source_repo is None:
+            raise ValueError("_get_from_repo called without template_repo configured")
 
         try:
             data = self._client.rest_get(f"/repos/{self._source_owner}/{self._source_repo}/contents/{key}")

@@ -28,6 +28,7 @@ import httpx
 
 from give_back.exceptions import (
     AuthenticationError,
+    GiveBackError,
     GraphQLError,
     RateLimitError,
     RepoNotFoundError,
@@ -222,8 +223,9 @@ class GitHubClient:
             reset_at = int(time.time()) + int(retry_after) if retry_after else None
             raise RateLimitError("GitHub API rate limit exceeded (429).", reset_at=reset_at)
 
-        # Raise for other 4xx/5xx
-        response.raise_for_status()
+        # Wrap any remaining error status codes (e.g. 500, 502, 422)
+        if response.status_code >= 400:
+            raise GiveBackError(f"GitHub API error ({response.status_code}) for {response.url}: {response.text[:200]}")
 
     def _update_rate_limit(self, response: httpx.Response) -> None:
         """Update rate limit tracking from response headers."""
