@@ -49,6 +49,7 @@ class TestPickLicense:
         with (
             patch("give_back.audit_fix.license.click.prompt", side_effect=["1", "Test User"]),
             patch("give_back.audit_fix.license.click.echo"),
+            patch("give_back.audit_fix.templates.confirm_with_preview", return_value=True),
         ):
             result = pick_license(client)
 
@@ -91,6 +92,7 @@ class TestPickLicense:
                 side_effect=["4", "https://choosealicense.com/licenses/gpl-3.0/", "Jane"],
             ),
             patch("give_back.audit_fix.license.click.echo"),
+            patch("give_back.audit_fix.templates.confirm_with_preview", return_value=True),
         ):
             result = pick_license(client)
 
@@ -107,9 +109,23 @@ class TestPickLicense:
         with (
             patch("give_back.audit_fix.license.click.prompt", return_value="1"),
             patch("give_back.audit_fix.license.click.echo"),
+            patch("give_back.audit_fix.templates.confirm_with_preview", return_value=True),
         ):
             result = pick_license(client, fullname="Pre-filled")
 
         assert result is not None
         content, fullname = result
         assert "Pre-filled" in content
+
+    def test_preview_skip_returns_none(self):
+        """User picks a license but skips at the preview step."""
+        client = MagicMock()
+        client.rest_get.return_value = {"body": "MIT License\nCopyright [year] [fullname]"}
+
+        with (
+            patch("give_back.audit_fix.license.click.prompt", side_effect=["1", "Test User"]),
+            patch("give_back.audit_fix.license.click.echo"),
+            patch("give_back.audit_fix.templates.confirm_with_preview", return_value=False),
+        ):
+            result = pick_license(client)
+        assert result is None

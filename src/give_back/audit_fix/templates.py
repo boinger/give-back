@@ -264,6 +264,45 @@ blank_issues_enabled: true
 # ---------------------------------------------------------------------------
 
 
+def preview_content(content: str, label: str, max_lines: int = 30) -> None:
+    """Display a preview of file content."""
+    lines = content.splitlines()
+    click.echo(f"\n  ── {label} ──")
+    for line in lines[:max_lines]:
+        click.echo(f"  │ {line}")
+    if len(lines) > max_lines:
+        click.echo(f"  │ ... ({len(lines) - max_lines} more lines)")
+    click.echo()
+
+
+def confirm_with_preview(content: str, label: str) -> bool:
+    """Ask user to write, preview, or skip a generated file. Returns True to write."""
+    while True:
+        choice = click.prompt(
+            f"  {label}: [w]rite / [p]review / [s]kip",
+            type=click.Choice(["w", "p", "s"], case_sensitive=False),
+            default="w",
+            show_choices=False,
+        )
+        if choice == "p":
+            preview_content(content, label)
+            continue
+        return choice == "w"
+
+
+def write_file(path: Path, content: str) -> None:
+    """Write *content* to *path* atomically. Creates parent directories as needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with open(fd, "w") as f:
+            f.write(content)
+        Path(tmp_path).replace(path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
+
+
 def write_if_missing(path: Path, content: str, label: str) -> bool:
     """Write *content* to *path* if it doesn't exist, with interactive confirmation.
 
@@ -281,16 +320,5 @@ def write_if_missing(path: Path, content: str, label: str) -> bool:
         click.echo(f"  Already exists: {label} — skipping")
         return False
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Atomic write: temp file in target's parent directory
-    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        with open(fd, "w") as f:
-            f.write(content)
-        Path(tmp_path).replace(path)
-    except BaseException:
-        Path(tmp_path).unlink(missing_ok=True)
-        raise
-
+    write_file(path, content)
     return True

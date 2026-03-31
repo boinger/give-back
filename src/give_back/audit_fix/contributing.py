@@ -1,4 +1,4 @@
-"""CONTRIBUTING.md wizard: section checklist → skeleton with TODO placeholders."""
+"""CONTRIBUTING.md wizard: section selection → skeleton with TODO placeholders."""
 
 from __future__ import annotations
 
@@ -6,63 +6,139 @@ import click
 
 _SECTIONS = [
     (
-        "1",
-        "Getting started",
         "Getting Started",
-        "Describe dev environment setup, prerequisites, and how to clone/install.",
+        """\
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/REPO_NAME.git`
+3. Install dependencies: *(describe how)*
+4. Create a branch: `git checkout -b my-feature`""",
     ),
-    ("2", "Running tests", "Running Tests", "Which command runs the test suite? Any setup needed first?"),
     (
-        "3",
-        "Submitting changes",
+        "Running Tests",
+        """\
+Run the test suite with:
+
+```bash
+# replace with your actual test command
+make test
+```""",
+    ),
+    (
         "Submitting Changes",
-        "Describe the PR process: branch naming, commit style, review expectations.",
+        """\
+1. Push your branch to your fork
+2. Open a pull request against `main`
+3. Describe what your PR does and why
+4. Reference any related issues""",
     ),
-    ("4", "Code style", "Code Style", "Which linter/formatter? Any style rules beyond what the tooling enforces?"),
     (
-        "5",
-        "Issue reporting",
-        "Reporting Issues",
-        "What makes a good bug report? What information should reporters include?",
+        "Code Style",
+        """\
+This project uses *(describe linter/formatter)* for code formatting.
+Run the formatter before submitting:
+
+```bash
+# replace with your actual format command
+make lint
+```""",
     ),
-    ("6", "Code of conduct", "Code of Conduct", "Reference your CODE_OF_CONDUCT.md or describe expected behavior."),
+    (
+        "Reporting Issues",
+        """\
+When reporting bugs, please include:
+- What you expected to happen
+- What actually happened
+- Steps to reproduce
+- Version information""",
+    ),
+    (
+        "Code of Conduct",
+        """\
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+By participating, you are expected to uphold this code.""",
+    ),
 ]
 
-_DEFAULT_SECTIONS = "1,2,3"
+
+def _render_section(heading: str, body: str) -> str:
+    return f"## {heading}\n\n{body}"
 
 
-def run_wizard() -> str | None:
+def run_wizard(has_coc: bool = True) -> str | None:
     """Interactive wizard that generates a CONTRIBUTING.md skeleton.
+
+    *has_coc*: whether CODE_OF_CONDUCT.md exists (or was just created).
+    If False, the "Code of Conduct" section is excluded.
 
     Returns the markdown content, or None if the user declines.
     """
+    sections = [s for s in _SECTIONS if has_coc or s[0] != "Code of Conduct"]
+
     click.echo()
     click.echo("  CONTRIBUTING.md helps contributors understand your process.")
     click.echo("  Not required — lacking one doesn't mean you don't want contributors,")
     click.echo("  only that you don't feel the need for formal rules.")
     click.echo()
+    click.echo("  Available sections:")
+    for i, (heading, _body) in enumerate(sections, 1):
+        click.echo(f"    {i}) {heading}")
+    click.echo()
 
-    if not click.confirm("  Create CONTRIBUTING.md?", default=True):
+    choice = click.prompt(
+        "  Include sections? [a]ll / [s]ome / [p]review / [n]one",
+        type=click.Choice(["a", "s", "p", "n"], case_sensitive=False),
+        default="a",
+        show_choices=False,
+    )
+
+    if choice == "n":
         return None
 
-    click.echo()
-    click.echo("  Which sections to include?")
-    for num, label, _heading, _desc in _SECTIONS:
-        click.echo(f"    {num}) {label}")
-    click.echo()
+    if choice == "p":
+        for heading, body in sections:
+            click.echo(f"\n  ── {heading} ──")
+            for line in _render_section(heading, body).splitlines():
+                click.echo(f"  │ {line}")
+        click.echo()
+        choice = click.prompt(
+            "  Include sections? [a]ll / [s]ome / [n]one",
+            type=click.Choice(["a", "s", "n"], case_sensitive=False),
+            default="a",
+            show_choices=False,
+        )
 
-    raw = click.prompt("  Include sections (comma-separated)", default=_DEFAULT_SECTIONS).strip()
+    if choice == "n":
+        return None
 
-    chosen_nums = {s.strip() for s in raw.split(",")}
-    selected = [(heading, desc) for num, _label, heading, desc in _SECTIONS if num in chosen_nums]
+    if choice == "s":
+        selected: list[tuple[str, str]] = []
+        for heading, body in sections:
+            while True:
+                per_section = click.prompt(
+                    f"  '{heading}': [y]es / [n]o / [p]review",
+                    type=click.Choice(["y", "n", "p"], case_sensitive=False),
+                    default="y",
+                    show_choices=False,
+                )
+                if per_section == "p":
+                    click.echo(f"\n  ── {heading} ──")
+                    for line in _render_section(heading, body).splitlines():
+                        click.echo(f"  │ {line}")
+                    click.echo()
+                    continue
+                if per_section == "y":
+                    selected.append((heading, body))
+                break
+    else:
+        # choice == "a"
+        selected = list(sections)
 
     if not selected:
         click.echo("  No sections selected. Skipping.")
         return None
 
-    lines = ["# Contributing\n"]
-    for heading, desc in selected:
-        lines.append(f"\n## {heading}\n")
-        lines.append(f"\n<!-- TODO: {desc} -->\n")
+    parts = ["# Contributing\n"]
+    for heading, body in selected:
+        parts.append(_render_section(heading, body))
 
-    return "\n".join(lines) + "\n"
+    return "\n\n".join(parts) + "\n"

@@ -80,16 +80,16 @@ class TestWalkFixes:
         """If one handler raises, others still run."""
         report = self._make_report(
             ("code_of_conduct", "community_health", False),
-            ("pr_template", "templates", False),
+            ("contributing", "community_health", False),
         )
         client = MagicMock()
 
         with (
-            patch("give_back.audit_fix.fix._fix_community_health", side_effect=RuntimeError("boom")),
-            patch("give_back.audit_fix.fix._fix_templates") as mock_templates,
+            patch("give_back.audit_fix.fix._fix_safe_defaults", side_effect=RuntimeError("boom")),
+            patch("give_back.audit_fix.fix._fix_contributing") as mock_contributing,
         ):
             walk_fixes(report, tmp_path, client)
-            mock_templates.assert_called_once()
+            mock_contributing.assert_called_once()
 
     def test_fix_summary_dataclass(self):
         s = FixSummary()

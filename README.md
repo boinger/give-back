@@ -52,6 +52,9 @@ uv tool install --from ./give-back give-back --reinstall
 git clone https://github.com/boinger/give-back.git
 cd give-back
 uv sync --group dev
+
+# Run from project venv (always uses current source, no reinstall needed)
+uv run give-back assess pallets/flask
 ```
 
 ## Authentication

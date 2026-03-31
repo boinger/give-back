@@ -84,4 +84,10 @@ def pick_license(client: GitHubClient, fullname: str | None = None) -> tuple[str
         fullname = click.prompt("  Copyright holder name", type=str).strip()
 
     content = _fill_placeholders(body, fullname)
+
+    from give_back.audit_fix.templates import confirm_with_preview
+
+    if not confirm_with_preview(content, "LICENSE"):
+        return None
+
     return content, fullname

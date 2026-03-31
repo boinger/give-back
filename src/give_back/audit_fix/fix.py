@@ -20,7 +20,7 @@ from give_back.audit_fix.templates import (
     FEATURE_REQUEST_YML,
     PR_TEMPLATE,
     SECURITY,
-    write_if_missing,
+    write_file,
 )
 from give_back.github_client import GitHubClient
 
@@ -143,41 +143,99 @@ def resolve_repo_dir(owner: str, repo: str) -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def _fix_community_health(report: AuditReport, repo_dir: Path, summary: FixSummary) -> None:
-    """Fix missing community health files."""
+def _fix_safe_defaults(report: AuditReport, repo_dir: Path, summary: FixSummary) -> None:
+    """Batch-fix missing community health files and templates with a single confirm."""
     owner, repo = report.owner, report.repo
-    items = {item.name: item for item in report.items if item.category == "community_health"}
+    items = {item.name: item for item in report.items if item.category in ("community_health", "templates")}
+
+    # Collect all missing safe-default files (exclude license + contributing, handled by wizards)
+    pending: list[tuple[Path, str, str]] = []
 
     if "code_of_conduct" in items and not items["code_of_conduct"].passed:
         content = CODE_OF_CONDUCT.format(owner=owner, repo=repo)
-        if write_if_missing(repo_dir / "CODE_OF_CONDUCT.md", content, "CODE_OF_CONDUCT.md"):
-            summary.local_files.append("CODE_OF_CONDUCT.md")
+        pending.append((repo_dir / "CODE_OF_CONDUCT.md", content, "CODE_OF_CONDUCT.md"))
 
     if "security" in items and not items["security"].passed:
         content = SECURITY.format(owner=owner, repo=repo)
-        if write_if_missing(repo_dir / "SECURITY.md", content, "SECURITY.md"):
-            summary.local_files.append("SECURITY.md")
-
-
-def _fix_templates(report: AuditReport, repo_dir: Path, summary: FixSummary) -> None:
-    """Fix missing PR and issue templates."""
-    items = {item.name: item for item in report.items if item.category == "templates"}
+        pending.append((repo_dir / "SECURITY.md", content, "SECURITY.md"))
 
     if "pr_template" in items and not items["pr_template"].passed:
-        path = repo_dir / ".github" / "PULL_REQUEST_TEMPLATE.md"
-        if write_if_missing(path, PR_TEMPLATE, ".github/PULL_REQUEST_TEMPLATE.md"):
-            summary.local_files.append(".github/PULL_REQUEST_TEMPLATE.md")
+        pending.append(
+            (repo_dir / ".github" / "PULL_REQUEST_TEMPLATE.md", PR_TEMPLATE, ".github/PULL_REQUEST_TEMPLATE.md")
+        )
 
     if "issue_templates" in items and not items["issue_templates"].passed:
         template_dir = repo_dir / ".github" / "ISSUE_TEMPLATE"
-        files = [
-            (template_dir / "bug_report.yml", BUG_REPORT_YML, ".github/ISSUE_TEMPLATE/bug_report.yml"),
-            (template_dir / "feature_request.yml", FEATURE_REQUEST_YML, ".github/ISSUE_TEMPLATE/feature_request.yml"),
-            (template_dir / "config.yml", CONFIG_YML, ".github/ISSUE_TEMPLATE/config.yml"),
-        ]
-        for path, content, label in files:
-            if write_if_missing(path, content, label):
-                summary.local_files.append(label)
+        pending.append((template_dir / "bug_report.yml", BUG_REPORT_YML, ".github/ISSUE_TEMPLATE/bug_report.yml"))
+        pending.append(
+            (template_dir / "feature_request.yml", FEATURE_REQUEST_YML, ".github/ISSUE_TEMPLATE/feature_request.yml")
+        )
+        pending.append((template_dir / "config.yml", CONFIG_YML, ".github/ISSUE_TEMPLATE/config.yml"))
+
+    # Filter out files that already exist
+    pending = [(p, c, lbl) for p, c, lbl in pending if not p.exists()]
+
+    if not pending:
+        return
+
+    click.echo("  Missing community health files:")
+    for _path, _content, label in pending:
+        click.echo(f"    + {label}")
+    click.echo()
+
+    choice = click.prompt(
+        "  Create these files? [a]ll / [s]ome / [p]review / [n]one",
+        type=click.Choice(["a", "s", "p", "n"], case_sensitive=False),
+        default="a",
+        show_choices=False,
+    )
+
+    if choice == "n":
+        return
+
+    if choice == "p":
+        for _path, content, label in pending:
+            click.echo(f"\n  ── {label} ──")
+            for line in content.splitlines()[:20]:
+                click.echo(f"  │ {line}")
+            if content.count("\n") > 20:
+                click.echo(f"  │ ... ({content.count(chr(10)) - 20} more lines)")
+            click.echo()
+        # After preview, ask again (without preview option)
+        choice = click.prompt(
+            "  Create these files? [a]ll / [s]ome / [n]one",
+            type=click.Choice(["a", "s", "n"], case_sensitive=False),
+            default="a",
+            show_choices=False,
+        )
+
+    if choice == "n":
+        return
+
+    if choice == "s":
+        for path, content, label in pending:
+            while True:
+                per_file = click.prompt(
+                    f"  {label}: [y]es / [n]o / [p]review",
+                    type=click.Choice(["y", "n", "p"], case_sensitive=False),
+                    default="y",
+                    show_choices=False,
+                )
+                if per_file == "p":
+                    from give_back.audit_fix.templates import preview_content
+
+                    preview_content(content, label)
+                    continue
+                if per_file == "y":
+                    write_file(path, content)
+                    summary.local_files.append(label)
+                break
+        return
+
+    # choice == "a"
+    for path, content, label in pending:
+        write_file(path, content)
+        summary.local_files.append(label)
 
 
 def _fix_license(report: AuditReport, repo_dir: Path, client: GitHubClient, summary: FixSummary) -> None:
@@ -186,13 +244,19 @@ def _fix_license(report: AuditReport, repo_dir: Path, client: GitHubClient, summ
     if "license" not in items or items["license"].passed:
         return
 
+    path = repo_dir / "LICENSE"
+    if path.exists():
+        click.echo("  Already exists: LICENSE — skipping")
+        return
+
     result = pick_license(client)
     if result is None:
         return
 
     content, _fullname = result
-    if write_if_missing(repo_dir / "LICENSE", content, "LICENSE"):
-        summary.local_files.append("LICENSE")
+    # Picker already confirmed with user, write directly (no double-prompt)
+    write_file(path, content)
+    summary.local_files.append("LICENSE")
 
 
 def _fix_contributing(report: AuditReport, repo_dir: Path, summary: FixSummary) -> None:
@@ -201,12 +265,19 @@ def _fix_contributing(report: AuditReport, repo_dir: Path, summary: FixSummary) 
     if "contributing" not in items or items["contributing"].passed:
         return
 
-    content = run_wizard()
+    path = repo_dir / "CONTRIBUTING.md"
+    if path.exists():
+        click.echo("  Already exists: CONTRIBUTING.md — skipping")
+        return
+
+    has_coc = (repo_dir / "CODE_OF_CONDUCT.md").exists()
+    content = run_wizard(has_coc=has_coc)
     if content is None:
         return
 
-    if write_if_missing(repo_dir / "CONTRIBUTING.md", content, "CONTRIBUTING.md"):
-        summary.local_files.append("CONTRIBUTING.md")
+    # Wizard already confirmed with user, write directly (no double-prompt)
+    write_file(path, content)
+    summary.local_files.append("CONTRIBUTING.md")
 
 
 def _fix_labels(report: AuditReport, client: GitHubClient, summary: FixSummary) -> None:
@@ -249,21 +320,13 @@ def walk_fixes(report: AuditReport, repo_dir: Path, client: GitHubClient) -> Fix
     click.echo("  Fixing failing checks...")
     click.echo()
 
-    # Community health files (except license and contributing, handled separately)
+    # Safe defaults: community health files + templates (single batch confirm)
     try:
-        _fix_community_health(report, repo_dir, summary)
+        _fix_safe_defaults(report, repo_dir, summary)
     except click.Abort:
         raise
     except Exception as exc:
         click.echo(f"  Error fixing community health files: {exc}")
-
-    # Templates
-    try:
-        _fix_templates(report, repo_dir, summary)
-    except click.Abort:
-        raise
-    except Exception as exc:
-        click.echo(f"  Error fixing templates: {exc}")
 
     # License (interactive picker)
     try:
@@ -299,20 +362,42 @@ def walk_fixes(report: AuditReport, repo_dir: Path, client: GitHubClient) -> Fix
 
 def print_fix_summary(summary: FixSummary) -> None:
     """Display what --fix created, distinguishing local vs remote changes."""
-    click.echo()
+    from rich.console import Console
+
+    console = Console()
+    console.print()
+
+    has_contributing = "CONTRIBUTING.md" in summary.local_files
+    safe_files = [f for f in summary.local_files if f != "CONTRIBUTING.md"]
+
+    if safe_files:
+        console.print("  [bold green]Created locally:[/bold green]")
+        for f in safe_files:
+            console.print(f"    [green]+[/green] {f}")
+        console.print()
+        console.print("  [dim]These are usable as-is, but we recommend reviewing before you commit.[/dim]")
+
+    if has_contributing:
+        if safe_files:
+            console.print()
+        console.print("  [bold yellow]Created locally (requires editing):[/bold yellow]")
+        console.print("    [yellow]+[/yellow] CONTRIBUTING.md")
+        console.print()
+        console.print("  [yellow]CONTRIBUTING.md contains placeholder text that you need to[/yellow]")
+        console.print("  [yellow]fill in with your project's specifics (install steps, test[/yellow]")
+        console.print("  [yellow]commands, etc.) before committing.[/yellow]")
 
     if summary.local_files:
-        click.echo("  Created locally (commit and push to apply):")
-        for f in summary.local_files:
-            click.echo(f"    + {f}")
+        console.print()
+        console.print("  [dim]None of these files are committed or pushed yet.[/dim]")
 
     if summary.remote_labels:
-        click.echo()
-        click.echo("  Applied to GitHub (effective immediately):")
+        console.print()
+        console.print("  [bold cyan]Applied to GitHub (effective immediately):[/bold cyan]")
         for label in summary.remote_labels:
-            click.echo(f"    + Label: {label}")
+            console.print(f"    [cyan]+[/cyan] Label: {label}")
 
     if not summary.local_files and not summary.remote_labels:
-        click.echo("  No changes made.")
+        console.print("  [dim]No changes made.[/dim]")
 
-    click.echo()
+    console.print()
