@@ -24,16 +24,17 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
     """
     # 1. Check gh is installed
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["gh", "--version"],
             capture_output=True,
-            check=True,
             timeout=10,
         )
     except FileNotFoundError:
         raise ForkError("gh CLI required. Install: https://cli.github.com")
     except subprocess.TimeoutExpired:
         raise ForkError("gh --version timed out after 10s")
+    if result.returncode != 0:
+        raise ForkError(f"gh CLI broken (exit {result.returncode}): {result.stderr.strip() if result.stderr else ''}")
 
     # 2. Check gh is authenticated
     try:

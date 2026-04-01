@@ -13,6 +13,7 @@ from give_back.state import (
     _parse_config_yaml,
     add_to_skip_list,
     get_cached_assessment,
+    get_discover_cache,
     get_previous_audit,
     get_skip_list,
     load_config,
@@ -21,6 +22,7 @@ from give_back.state import (
     remove_from_skip_list,
     save_assessment,
     save_audit_result,
+    save_discover_cache,
     save_state,
 )
 
@@ -327,3 +329,85 @@ class TestAuditResults:
             }
         )
         assert get_previous_audit("pallets", "flask") is None
+
+
+class TestDiscoverCache:
+    def test_save_and_get_fresh(self, state_dir):
+        """Save a cache entry, retrieve it while fresh."""
+        save_discover_cache("abc123", "language:python", [{"full_name": "pallets/flask"}])
+        result = get_discover_cache("abc123")
+        assert result is not None
+        assert result["query"] == "language:python"
+        assert len(result["repos"]) == 1
+
+    def test_save_corrupt_state_recovers(self, state_dir):
+        """If state is corrupt, save_discover_cache recovers and saves anyway."""
+        _, state_file = state_dir
+        state_file.write_text("not json")
+        # Should not raise — recovers from corruption
+        save_discover_cache("abc123", "language:python", [])
+        result = get_discover_cache("abc123")
+        assert result is not None
+
+    def test_get_expired(self, state_dir):
+        """Cache older than TTL returns None."""
+        save_discover_cache("abc123", "language:python", [])
+        state = json.loads((state_dir[1]).read_text())
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+        state["discover_cache"]["abc123"]["timestamp"] = old_time
+        save_state(state)
+        assert get_discover_cache("abc123") is None
+
+    @pytest.mark.parametrize(
+        "age_seconds,expected_hit",
+        [
+            (24 * 3600 - 1, True),  # 1 second under 24h TTL
+            (24 * 3600 + 1, False),  # 1 second over 24h TTL
+        ],
+    )
+    def test_ttl_boundary(self, state_dir, age_seconds, expected_hit):
+        """TTL boundary at second precision."""
+        save_discover_cache("abc123", "language:python", [])
+        state = json.loads((state_dir[1]).read_text())
+        ts = (datetime.now(timezone.utc) - timedelta(seconds=age_seconds)).isoformat()
+        state["discover_cache"]["abc123"]["timestamp"] = ts
+        save_state(state)
+        result = get_discover_cache("abc123")
+        if expected_hit:
+            assert result is not None
+        else:
+            assert result is None
+
+    def test_get_missing(self, state_dir):
+        """No cache entry → None."""
+        assert get_discover_cache("nonexistent") is None
+
+    def test_get_invalid_timestamp(self, state_dir):
+        """Invalid ISO timestamp → None."""
+        save_discover_cache("abc123", "language:python", [])
+        state = json.loads((state_dir[1]).read_text())
+        state["discover_cache"]["abc123"]["timestamp"] = "not-a-date"
+        save_state(state)
+        assert get_discover_cache("abc123") is None
+
+    def test_get_corrupt_state(self, state_dir):
+        """StateCorruptError on load → None."""
+        _, state_file = state_dir
+        state_file.write_text("not json")
+        assert get_discover_cache("abc123") is None
+
+
+class TestLoadConfigErrors:
+    def test_unreadable_config(self, state_dir, capsys):
+        """OSError reading config → returns defaults with warning."""
+        from give_back.state import CONFIG_FILE
+
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text("valid content")
+        with patch("give_back.state.CONFIG_FILE") as mock_config:
+            mock_config.exists.return_value = True
+            mock_config.read_text.side_effect = OSError("permission denied")
+            mock_config.__str__ = lambda self: str(CONFIG_FILE)
+            result = load_config()
+        assert result.workspace_dir == "~/give-back-workspaces"
+        assert result.handoff_command is None
