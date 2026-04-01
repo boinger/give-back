@@ -1,7 +1,7 @@
 # give-back
 
 A CLI tool that handles everything around contributing to open-source projects
-except the actual coding. Find a project, evaluate whether it's worth your
+_except the actual coding_. Find a project, evaluate whether it's worth your
 time, pick an issue, understand the conventions, set up your workspace, and
 then once you're done coding: submit your PR and track its progress.
 
@@ -9,10 +9,10 @@ then once you're done coding: submit your PR and track its progress.
 
 You want to contribute to open source but don't know where to start, or
 you've tried contributing but been burned by repos that ignore PRs. give-back
-solves both problems.
+helps avoid both problems.
 
 **Find a project.** Search GitHub for repos that actually welcome contributions,
-filtered by language and topic, pre-screened for viability.
+filtered by language and/or topic, then let the tool screen for viability.
 
 **Evaluate it.** Query 8 signals from the GitHub API: merge rate for outside
 PRs, response time, ghost-closing rate, CONTRIBUTING.md quality, AI policy,
