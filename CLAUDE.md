@@ -91,6 +91,13 @@ make run ARGS='audit --mine'              # batch-audit your repos (top 20 by ac
 make run ARGS='audit --mine --limit 10'   # audit top 10 repos
 ```
 
+## Companion tools
+
+- **pr-owl**: PR merge readiness scanner. When `status` shows open PRs with
+  issues, the give-back skill suggests pr-owl for diagnosis and automated
+  fixes (rebase, conflict resolution, CI triage). Optional, give-back works
+  fully without it. See `skills/SKILL.md` companion section.
+
 ## Key Files
 
 | File | Purpose |

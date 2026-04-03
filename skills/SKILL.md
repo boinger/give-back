@@ -260,6 +260,42 @@ give-back skip <owner/repo>
 give-back unskip <owner/repo>
 ```
 
+## Companion: pr-owl (PR merge readiness)
+
+After `give-back status` shows open PRs, or after `give-back submit` creates
+a PR, check if pr-owl is installed and authenticated:
+
+```bash
+which pr-owl 2>/dev/null && gh auth status 2>/dev/null && echo "PR_OWL_READY" || echo "UNAVAILABLE"
+```
+
+If UNAVAILABLE, do not mention pr-owl. Degrade silently.
+
+**First time pr-owl is detected**, ask:
+
+> "I see pr-owl is also installed. It can diagnose merge blockers (conflicts,
+> stale branches, failing CI) and fix them automatically. Want me to check
+> PR health when running give-back status?"
+
+Save the preference to project memory on EITHER answer (yes or no). Check
+memory before asking. Never ask twice.
+
+**When preference is "yes" and status shows open PRs:**
+
+Run pr-owl once (not per-repo) and let Claude interpret the results:
+
+```bash
+_TMPFILE=$(mktemp /tmp/pr-owl-gb-XXXXXX.json)
+pr-owl audit --json 2>/dev/null > "$_TMPFILE" && echo "PR_OWL_OK" || echo "PR_OWL_FAILED"
+```
+
+If PR_OWL_OK, read the JSON with the Read tool. Match PRs to give-back
+contributions by (repo, pr_number). Summarize merge readiness alongside
+each open contribution. If PR_OWL_FAILED, say "pr-owl audit failed,
+skipping merge readiness check" and continue normally.
+
+Clean up: `rm -f "$_TMPFILE"`
+
 ## Tone
 
 Be direct about what the signals mean for the user's time investment.
