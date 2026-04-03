@@ -210,7 +210,7 @@ def evaluate_signals(data: RepoData, client: GitHubClient, verbose: bool = False
         except GiveBackError:
             signal_results.append((signal_def.weight, None))
             successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))
-        except Exception as exc:
+        except (KeyError, TypeError, ValueError, AttributeError, ZeroDivisionError) as exc:
             _log.warning("Signal %s raised unexpected error: %s", signal_def.name, exc)
             signal_results.append((signal_def.weight, None))
             successful_results.append(SignalResult(score=0.0, tier=Tier.RED, summary="N/A — evaluation failed"))

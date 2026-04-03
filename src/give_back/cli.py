@@ -1148,7 +1148,8 @@ def audit(
         return
 
     # --- Single repo mode ---
-    assert repo is not None  # validated above
+    if repo is None:
+        raise click.UsageError("repo is required for single-repo audit")
 
     try:
         owner, repo_name = _parse_repo(repo)

@@ -73,6 +73,7 @@ def get_default_branch(clone_dir: Path) -> str:
         capture_output=True,
         text=True,
         cwd=clone_dir,
+        timeout=10,
     )
     if result.returncode == 0:
         # refs/remotes/origin/main → main
