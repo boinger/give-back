@@ -102,7 +102,7 @@ class TestCheckCommand:
             assert result.exit_code == 1
             assert "Cannot read brief" in result.output
 
-    @patch("give_back.cli.resolve_token", return_value=None)
+    @patch("give_back.cli.check.resolve_token", return_value=None)
     @patch("subprocess.run")
     def test_check_in_workspace(self, mock_subprocess, mock_token, tmp_path):
         """Running check in a valid workspace runs guardrails and prints results."""
@@ -134,7 +134,7 @@ class TestCheckCommand:
 
 
 class TestPrepareCommand:
-    @patch("give_back.cli.resolve_token", return_value=None)
+    @patch("give_back.cli.prepare.resolve_token", return_value=None)
     def test_prepare_requires_auth(self, mock_token):
         """Prepare refuses to run without authentication."""
         runner = CliRunner()
@@ -142,8 +142,8 @@ class TestPrepareCommand:
         assert result.exit_code == 1
         assert "requires authentication" in result.output
 
-    @patch("give_back.cli.load_config")
-    @patch("give_back.cli.resolve_token", return_value="fake-token")
+    @patch("give_back.cli.prepare.load_config")
+    @patch("give_back.cli.prepare.resolve_token", return_value="fake-token")
     def test_prepare_fork_error(self, mock_token, mock_config, tmp_path):
         """Prepare exits 1 when fork fails."""
         from give_back.models import Config
@@ -152,7 +152,7 @@ class TestPrepareCommand:
 
         runner = CliRunner()
         with (
-            patch("give_back.cli.GitHubClient") as mock_client_cls,
+            patch("give_back.cli.prepare.GitHubClient") as mock_client_cls,
             patch("give_back.prepare.fork.ensure_fork") as mock_fork,
         ):
             mock_client = MagicMock()
@@ -165,8 +165,8 @@ class TestPrepareCommand:
             assert result.exit_code == 1
             assert "gh CLI not authenticated" in result.output
 
-    @patch("give_back.cli.load_config")
-    @patch("give_back.cli.resolve_token", return_value="fake-token")
+    @patch("give_back.cli.prepare.load_config")
+    @patch("give_back.cli.prepare.resolve_token", return_value="fake-token")
     def test_prepare_workspace_error(self, mock_token, mock_config, tmp_path):
         """Prepare exits 1 when workspace setup fails."""
         from give_back.models import Config
@@ -175,7 +175,7 @@ class TestPrepareCommand:
 
         runner = CliRunner()
         with (
-            patch("give_back.cli.GitHubClient") as mock_client_cls,
+            patch("give_back.cli.prepare.GitHubClient") as mock_client_cls,
             patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace") as mock_ws,
         ):
@@ -190,8 +190,8 @@ class TestPrepareCommand:
             assert result.exit_code == 1
             assert "Clone failed" in result.output
 
-    @patch("give_back.cli.load_config")
-    @patch("give_back.cli.resolve_token", return_value="fake-token")
+    @patch("give_back.cli.prepare.load_config")
+    @patch("give_back.cli.prepare.resolve_token", return_value="fake-token")
     def test_prepare_success(self, mock_token, mock_config, tmp_path):
         """Prepare runs the full pipeline and prints the action plan."""
         from give_back.models import Config
@@ -205,7 +205,7 @@ class TestPrepareCommand:
 
         runner = CliRunner()
         with (
-            patch("give_back.cli.GitHubClient") as mock_client_cls,
+            patch("give_back.cli.prepare.GitHubClient") as mock_client_cls,
             patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace", return_value=workspace_path),
             patch("give_back.prepare.workspace.generate_branch_name", return_value="give-back/0-contribution"),
@@ -221,8 +221,8 @@ class TestPrepareCommand:
             assert "Workspace ready" in result.output
             mock_write_brief.assert_called_once()
 
-    @patch("give_back.cli.load_config")
-    @patch("give_back.cli.resolve_token", return_value="fake-token")
+    @patch("give_back.cli.prepare.load_config")
+    @patch("give_back.cli.prepare.resolve_token", return_value="fake-token")
     def test_prepare_json_output(self, mock_token, mock_config, tmp_path):
         """Prepare with --json outputs JSON."""
         from give_back.models import Config
@@ -235,7 +235,7 @@ class TestPrepareCommand:
 
         runner = CliRunner()
         with (
-            patch("give_back.cli.GitHubClient") as mock_client_cls,
+            patch("give_back.cli.prepare.GitHubClient") as mock_client_cls,
             patch("give_back.prepare.fork.ensure_fork", return_value=("myuser", "flask")),
             patch("give_back.prepare.workspace.setup_workspace", return_value=workspace_path),
             patch("give_back.prepare.workspace.generate_branch_name", return_value="give-back/0-contribution"),

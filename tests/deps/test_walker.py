@@ -418,7 +418,7 @@ class TestRequiresAuth:
         from give_back.cli import cli
 
         runner = CliRunner()
-        with patch("give_back.cli.resolve_token", return_value=None):
+        with patch("give_back.cli.deps.resolve_token", return_value=None):
             result = runner.invoke(cli, ["deps", "pallets/flask"])
 
         assert result.exit_code != 0
