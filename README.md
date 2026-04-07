@@ -36,14 +36,33 @@ across all your contributions.
 Requires Python 3.11+ and [uv](https://github.com/astral-sh/uv) (fast Python package manager).
 
 ```bash
-# Recommended: install as a global CLI tool
+# Install the CLI
 uv tool install --from git+https://github.com/boinger/give-back.git give-back
 
-# Or from a local checkout
-uv tool install --from ./give-back give-back
+# Install the Claude Code skill (enables /give-back in Claude)
+give-back skill install
+```
 
-# Reinstall after source changes
-uv tool install --from ./give-back give-back --reinstall
+Then open Claude Code (or start a new session if it's already running) and type
+`/give-back` to use the skill.
+
+The skill installer symlinks the bundled SKILL.md to `~/.claude/skills/give-back/`
+by default (drift-proof — the installed file IS the bundled file, so updates flow
+through automatically). Use `give-back skill install --copy` if you prefer a real
+file copy (e.g., for read-only filesystems or audit trails).
+
+To upgrade:
+
+```bash
+uv tool upgrade give-back
+give-back skill install   # re-link to refreshed bundled skill
+```
+
+To uninstall:
+
+```bash
+give-back skill uninstall
+uv tool uninstall give-back
 ```
 
 ### Development install
@@ -55,6 +74,10 @@ uv sync --group dev
 
 # Run from project venv (always uses current source, no reinstall needed)
 uv run give-back assess pallets/flask
+
+# Or install editable globally
+uv tool install --from ./give-back give-back --reinstall
+give-back skill install   # symlinks src/give_back/skill/SKILL.md → live edits
 ```
 
 ## Authentication

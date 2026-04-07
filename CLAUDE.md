@@ -89,6 +89,9 @@ make run ARGS='audit fix pallets/flask --template-repo myorg/standards'  # custo
 make run ARGS='audit fix pallets/flask --template-dir ./templates'       # custom templates from local dir
 make run ARGS='audit mine'                # batch-audit your repos (top 20 by activity)
 make run ARGS='audit mine --limit 10'     # audit top 10 repos
+make run ARGS='skill install'             # install Claude Code skill (symlink default)
+make run ARGS='skill install --copy'      # copy instead of symlink
+make run ARGS='skill uninstall'           # remove the skill
 ```
 
 ## Companion tools
@@ -96,7 +99,7 @@ make run ARGS='audit mine --limit 10'     # audit top 10 repos
 - **pr-owl**: PR merge readiness scanner. When `status` shows open PRs with
   issues, the give-back skill suggests pr-owl for diagnosis and automated
   fixes (rebase, conflict resolution, CI triage). Optional, give-back works
-  fully without it. See `skills/SKILL.md` companion section.
+  fully without it. See `src/give_back/skill/SKILL.md` companion section.
 
 ## Key Files
 
