@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from rich.console import Console
 
+from give_back.console import _effective_width
 from give_back.models import Assessment, SignalWeight, Tier
 
-_console = Console()
+_console = Console(width=_effective_width())
 
 _TIER_COLORS = {
     Tier.GREEN: "green",
