@@ -228,6 +228,45 @@ current branch and updates context.json with the PR status.
   the user. No further action needed on this issue.
 - If no PR is detected: Normal flow, user hasn't submitted yet.
 
+## For maintainers: Audit your repo
+
+If the user maintains an open-source project and wants to improve its
+contributor-friendliness, run an audit. **If the user is inside their repo
+already, just run `give-back audit` with no arguments — it auto-detects
+from the current directory's git origin.**
+
+```bash
+give-back audit --verbose
+```
+
+If the user is not inside the repo, or wants to audit a different one,
+pass it explicitly:
+
+```bash
+give-back audit pallets/flask --verbose
+```
+
+(Note: options can appear before or after the positional argument. Both
+`audit pallets/flask --verbose` and `audit --verbose pallets/flask` work.)
+
+This produces a pass/fail checklist covering community health files (LICENSE,
+CONTRIBUTING, CoC, SECURITY), templates, labels, and viability signals.
+
+**Comparison mode:** Compare against a well-run repo in the same space:
+
+```bash
+give-back audit pallets/flask --compare django/django
+```
+
+**Convention scan:** Add `--conventions` to also check commit format, merge
+strategy, code style, and test framework (clones the repo, slower).
+
+**Subcommands for specialized actions:**
+
+- `give-back audit fix` — interactively fix failing checks (auto-detects cwd
+  or accepts an explicit repo)
+- `give-back audit mine` — batch-audit your own repos, ranked by activity
+
 ## Skipping steps
 
 The user doesn't have to follow the full workflow. Adapt:

@@ -10,16 +10,17 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from give_back.cli._shared import _GITHUB_REMOTE_URL_RE
 from give_back.conventions.models import BranchConvention
 from give_back.exceptions import WorkspaceError
-
-_GITHUB_SLUG_RE = re.compile(r"(?:git@github\.com:|https://github\.com/)([^/]+/[^/.]+?)(?:\.git)?$")
 
 
 def _normalize_github_url(url: str) -> str | None:
     """Extract 'owner/repo' from a GitHub URL (SSH or HTTPS). Returns None if not GitHub."""
-    match = _GITHUB_SLUG_RE.match(url.strip())
-    return match.group(1) if match else None
+    match = _GITHUB_REMOTE_URL_RE.match(url.strip())
+    if match:
+        return f"{match.group(1)}/{match.group(2)}"
+    return None
 
 
 def setup_workspace(

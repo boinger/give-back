@@ -1,4 +1,11 @@
-"""CLI command group: audit (repo, fix, mine)."""
+"""CLI command group: audit (default 'repo' action, fix, mine).
+
+Uses DefaultGroup so options can appear after the positional argument.
+The 'repo' subcommand is the default action; `audit pallets/flask --verbose`
+routes to `audit repo pallets/flask --verbose` under the hood.
+
+Auto-detects the repo from cwd when no positional is provided.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +15,7 @@ from datetime import datetime, timezone
 import click
 
 from give_back.auth import resolve_token
-from give_back.cli._shared import _parse_repo
+from give_back.cli._shared import DefaultGroup, _parse_repo, detect_repo_from_cwd
 from give_back.console import stderr_console as _console
 from give_back.exceptions import (
     AuthenticationError,
@@ -18,66 +25,101 @@ from give_back.exceptions import (
 from give_back.github_client import GitHubClient
 
 
-@click.group(invoke_without_command=True)
+@click.group(cls=DefaultGroup, default="repo", default_if_no_args=True)
+def audit() -> None:
+    """Audit a repo's contributor-friendliness for maintainers.
+
+    Produces a checklist of community health files, templates, labels, and
+    viability signals with actionable recommendations for each failing item.
+
+    With no REPO argument, auto-detects from the current directory's git origin.
+
+    Examples:
+
+    \b
+        give-back audit                          # auto-detect from cwd
+        give-back audit --verbose                # auto-detect, verbose
+        give-back audit pallets/flask
+        give-back audit pallets/flask --verbose  # options anywhere
+        give-back audit pallets/flask --compare django/django
+        give-back audit fix                      # fix mode for cwd repo
+        give-back audit fix pallets/flask
+        give-back audit mine
+    """
+
+
+def _resolve_repo_or_exit(repo: str | None) -> tuple[str, str]:
+    """Resolve a repo to (owner, repo_name).
+
+    If `repo` is given, parse it. Otherwise auto-detect from cwd.
+    Prints a clear error and exits if neither works.
+    """
+    if repo:
+        try:
+            return _parse_repo(repo)
+        except click.BadParameter as exc:
+            _console.print(f"[red]Error:[/red] {exc.format_message()}")
+            sys.exit(1)
+
+    detected = detect_repo_from_cwd()
+    if detected is None:
+        _console.print("[red]Error:[/red] No repo specified and could not auto-detect from current directory.")
+        _console.print("  Run from inside a github.com clone, or pass owner/repo as an argument.")
+        _console.print("  (Note: GitHub Enterprise is not currently supported for auto-detection.)")
+        sys.exit(1)
+
+    owner, repo_name = detected
+    _console.print(f"  [dim]Auditing {owner}/{repo_name} (detected from origin)[/dim]")
+    return owner, repo_name
+
+
+@audit.command("repo")
 @click.argument("repo", required=False, default=None)
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
 @click.option("--verbose", "-v", is_flag=True, help="Show signal details (scores, sample sizes).")
 @click.option("--conventions", is_flag=True, help="Also scan contribution conventions (clones the repo, slower).")
 @click.option("--compare", default=None, help="Compare against another repo side-by-side.")
-@click.pass_context
-def audit(
-    ctx: click.Context,
+def audit_repo(
     repo: str | None,
     json_output: bool,
     verbose: bool,
     conventions: bool,
     compare: str | None,
 ) -> None:
-    """Audit a repo's contributor-friendliness for maintainers.
+    """Audit a single repo (the default action).
 
-    Produces a checklist of community health files, templates, labels, and
-    viability signals with actionable recommendations for each failing item.
-
-    Examples:
+    With no REPO argument, auto-detects from the current directory.
 
     \b
+        give-back audit                       # default action, auto-detect
         give-back audit pallets/flask
-        give-back audit pallets/flask --compare django/django
-        give-back audit pallets/flask --conventions
-        give-back audit fix pallets/flask
-        give-back audit fix pallets/flask --template-repo myorg/standards
-        give-back audit mine
-        give-back audit mine --limit 10
+        give-back audit pallets/flask --verbose
+        give-back audit repo pallets/flask    # explicit subcommand form
     """
-    # If a subcommand was invoked, let it run
-    if ctx.invoked_subcommand is not None:
-        return
-
-    # Default behavior: audit a single repo
-    if not repo:
-        _console.print("[red]Error:[/red] Please provide a REPO argument or use `audit mine`.")
-        sys.exit(1)
-
-    _run_audit_repo(repo, json_output, verbose, conventions, compare)
+    owner, repo_name = _resolve_repo_or_exit(repo)
+    _run_audit_repo(
+        owner=owner,
+        repo_name=repo_name,
+        json_output=json_output,
+        verbose=verbose,
+        conventions=conventions,
+        compare=compare,
+    )
 
 
 def _run_audit_repo(
-    repo: str,
+    *,
+    owner: str,
+    repo_name: str,
     json_output: bool,
     verbose: bool,
     conventions: bool,
     compare: str | None,
 ) -> None:
-    """Run single-repo audit (shared by group default and explicit invocation)."""
+    """Run single-repo audit. Always called with keyword arguments."""
     from give_back.audit import run_audit
     from give_back.output import print_audit, print_audit_comparison, print_audit_json
     from give_back.state import get_previous_audit, save_audit_result
-
-    try:
-        owner, repo_name = _parse_repo(repo)
-    except click.BadParameter as exc:
-        _console.print(f"[red]Error:[/red] {exc.format_message()}")
-        sys.exit(1)
 
     compare_owner: str | None = None
     compare_repo: str | None = None
@@ -129,7 +171,7 @@ def _run_audit_repo(
 
 
 @audit.command("fix")
-@click.argument("repo")
+@click.argument("repo", required=False, default=None)
 @click.option("--verbose", "-v", is_flag=True, help="Show signal details.")
 @click.option("--conventions", is_flag=True, help="Also scan contribution conventions.")
 @click.option(
@@ -139,7 +181,7 @@ def _run_audit_repo(
     "--template-dir", default=None, type=click.Path(exists=True), help="Use templates from a local directory."
 )
 def audit_fix(
-    repo: str,
+    repo: str | None,
     verbose: bool,
     conventions: bool,
     template_repo: str | None,
@@ -148,8 +190,10 @@ def audit_fix(
     """Interactively fix failing audit checks.
 
     Generates missing community health files and creates labels.
+    With no REPO argument, auto-detects from the current directory.
 
     \b
+        give-back audit fix                      # auto-detect from cwd
         give-back audit fix pallets/flask
         give-back audit fix pallets/flask --template-repo myorg/standards
         give-back audit fix pallets/flask --template-dir ./templates
@@ -168,11 +212,7 @@ def audit_fix(
         _console.print("[red]Error:[/red] audit fix requires an interactive terminal.")
         sys.exit(1)
 
-    try:
-        owner, repo_name = _parse_repo(repo)
-    except click.BadParameter as exc:
-        _console.print(f"[red]Error:[/red] {exc.format_message()}")
-        sys.exit(1)
+    owner, repo_name = _resolve_repo_or_exit(repo)
 
     token = resolve_token()
     if not token:
