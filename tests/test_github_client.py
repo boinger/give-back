@@ -140,6 +140,80 @@ class TestSearch:
         assert result["total_count"] == 3
 
 
+class TestRateBucketSeparation:
+    """Regression: search responses must not poison the core rate counter.
+
+    Before the fix, ``_update_rate_limit`` ran for every request including
+    ``/search/*``, causing the search bucket's ``X-RateLimit-Remaining`` (30/min)
+    to overwrite the core counter used by ``has_rate_budget``. ``discover``
+    then stopped after 0 assessments even with 4991/5000 core budget free.
+    """
+
+    @respx.mock
+    def test_search_response_does_not_update_core_counter(self, client):
+        respx.get("https://api.github.com/search/repositories").mock(
+            return_value=httpx.Response(
+                200,
+                json={"total_count": 0, "items": []},
+                headers={
+                    "X-RateLimit-Resource": "search",
+                    "X-RateLimit-Remaining": "5",
+                    "X-RateLimit-Limit": "30",
+                    "X-RateLimit-Reset": "9999999",
+                },
+            )
+        )
+        client.search_repos("language:python stars:>100")
+
+        # Core counter must be untouched — has_rate_budget should still allow a
+        # healthy assessment batch.
+        assert client._rate_remaining is None
+        assert client.has_rate_budget(30) is True
+        # The search-bucket counter should have been updated instead.
+        assert client._search_remaining == 5
+
+    @respx.mock
+    def test_core_response_updates_core_counter(self, client):
+        respx.get("https://api.github.com/repos/pallets/flask").mock(
+            return_value=httpx.Response(
+                200,
+                json={"name": "flask"},
+                headers={
+                    "X-RateLimit-Resource": "core",
+                    "X-RateLimit-Remaining": "4991",
+                    "X-RateLimit-Limit": "5000",
+                    "X-RateLimit-Reset": "9999999",
+                },
+            )
+        )
+        client.rest_get("/repos/pallets/flask")
+
+        assert client._rate_remaining == 4991
+        assert client.has_rate_budget(30) is True
+        # Search counter untouched by a core response.
+        assert client._search_remaining is None
+
+    @respx.mock
+    def test_core_response_does_not_update_search_counter(self, client):
+        """Mirror guard: a stray core response must not clobber search state."""
+        respx.get("https://api.github.com/repos/pallets/flask").mock(
+            return_value=httpx.Response(
+                200,
+                json={"name": "flask"},
+                headers={
+                    "X-RateLimit-Resource": "core",
+                    "X-RateLimit-Remaining": "4991",
+                    "X-RateLimit-Limit": "5000",
+                    "X-RateLimit-Reset": "9999999",
+                },
+            )
+        )
+        # Pre-seed the search counter as if a prior search had run.
+        client._search_remaining = 20
+        client.rest_get("/repos/pallets/flask")
+        assert client._search_remaining == 20
+
+
 class TestRetry:
     @respx.mock
     def test_timeout_retries(self, client):

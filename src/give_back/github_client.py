@@ -228,7 +228,20 @@ class GitHubClient:
             raise GiveBackError(f"GitHub API error ({response.status_code}) for {response.url}: {response.text[:200]}")
 
     def _update_rate_limit(self, response: httpx.Response) -> None:
-        """Update rate limit tracking from response headers."""
+        """Update core rate limit tracking from response headers.
+
+        GitHub tracks several rate-limit buckets independently (core, search,
+        graphql, integration_manifest, ...) and identifies which bucket a
+        response belongs to via ``X-RateLimit-Resource``. Because
+        ``_request_with_retry`` runs for every request — including
+        ``/search/*`` — we must ignore responses from other buckets here, or
+        search responses will poison the core counter consulted by
+        :meth:`has_rate_budget`.
+        """
+        resource = response.headers.get("X-RateLimit-Resource")
+        if resource is not None and resource != "core":
+            return
+
         remaining = response.headers.get("X-RateLimit-Remaining")
         limit = response.headers.get("X-RateLimit-Limit")
         reset = response.headers.get("X-RateLimit-Reset")
@@ -241,7 +254,16 @@ class GitHubClient:
             self._rate_reset = int(reset)
 
     def _update_search_rate_limit(self, response: httpx.Response) -> None:
-        """Update search-specific rate limit tracking."""
+        """Update search-specific rate limit tracking.
+
+        Mirror of :meth:`_update_rate_limit`: only accept headers when the
+        response is explicitly from the ``search`` bucket, so a stray core
+        response cannot clobber the search counter.
+        """
+        resource = response.headers.get("X-RateLimit-Resource")
+        if resource is not None and resource != "search":
+            return
+
         remaining = response.headers.get("X-RateLimit-Remaining")
         reset = response.headers.get("X-RateLimit-Reset")
 
