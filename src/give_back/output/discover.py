@@ -39,7 +39,11 @@ def print_discover(summary: DiscoverSummary, verbose: bool = False) -> None:
     table.add_column("Stars", justify="right", min_width=6)
     table.add_column("Tier", justify="center", min_width=8)
     table.add_column("Issues", justify="right", min_width=6)
-    table.add_column("Description", min_width=30)
+    # Let rich wrap the description at word boundaries instead of chopping
+    # with a Python slice. max_width caps the column on wide terminals so a
+    # very long description doesn't dominate the layout; overflow="fold"
+    # ensures graceful wrapping of the rare string that still overruns.
+    table.add_column("Description", min_width=30, max_width=60, overflow="fold")
 
     for i, r in enumerate(summary.results, 1):
         if r.tier is not None:
@@ -54,15 +58,13 @@ def print_discover(summary: DiscoverSummary, verbose: bool = False) -> None:
             tier_color = "dim"
             tier_text = "—"
 
-        desc = (r.description or "")[:60]
-
         table.add_row(
             str(i),
             f"{r.owner}/{r.repo}",
             _format_stars(r.stars),
             f"[{tier_color}]{tier_text}[/{tier_color}]",
             str(r.open_issue_count),
-            desc,
+            r.description or "",
         )
 
     _console.print(table)
