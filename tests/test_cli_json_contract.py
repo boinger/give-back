@@ -72,9 +72,7 @@ class TestJsonContractIntegration:
       suppress).
     """
 
-    def _run_status(
-        self, tmp_path, extra_env: dict[str, str] | None = None
-    ) -> subprocess.CompletedProcess[str]:
+    def _run_status(self, tmp_path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         workspace = tmp_path / "empty_workspace"
         workspace.mkdir()
         env = {
