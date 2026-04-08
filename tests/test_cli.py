@@ -249,6 +249,9 @@ class TestPrepareCommand:
 
             result = runner.invoke(cli, ["prepare", "pallets/flask", "--skip-conventions", "--json"])
             assert result.exit_code == 0
-            parsed = json.loads(result.output)
+            # Click 8.2+ CliRunner: `result.output` mixes stdout+stderr.
+            # Our skill-install hint writes to stderr_console; JSON-parsing
+            # the mixed buffer fails. Use `result.stdout` for JSON payload.
+            parsed = json.loads(result.stdout)
             assert parsed["branch_name"] == "give-back/0-contribution"
             assert parsed["repo"] == "flask"
