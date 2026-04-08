@@ -196,6 +196,10 @@ class TestMissingSkillHint:
     These tests patch stderr_console directly because Rich's Console binds to
     sys.stderr at construction time, so CliRunner's stderr capture doesn't work
     for output already routed through a Rich Console object.
+
+    They also patch `_stdout_isatty` / `_stderr_isatty` to True by default
+    so the isatty gate lets the hint through. The gate itself is exercised
+    by the dedicated TTY-gate tests further down.
     """
 
     def _make_capture_console(self) -> tuple[Console, io.StringIO]:
@@ -213,6 +217,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -229,6 +235,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -245,6 +253,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -253,8 +263,12 @@ class TestMissingSkillHint:
         # The function uses stderr_console.print, never stdout. We verify this
         # structurally: if it had used stdout, our patch wouldn't have caught it.
 
-    def test_hint_prints_on_every_invocation_until_installed(self, tmp_path):
-        """The hint prints on every call while the skill is missing."""
+    def test_hint_prints_on_every_interactive_invocation_until_installed(self, tmp_path):
+        """The hint prints on every interactive call while the skill is missing.
+
+        "Interactive" = both stdout and stderr are TTYs. Non-interactive calls
+        are suppressed by the TTY gate — covered by the dedicated gate tests.
+        """
         fake_home = tmp_path / "home"
         fake_home.mkdir()
         console, buf = self._make_capture_console()
@@ -262,6 +276,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
             _check_skill_installed_hint()
@@ -275,6 +291,10 @@ class TestMissingSkillHint:
 
         It's redundant — they're literally managing the skill state. The check is in
         the root cli() callback which inspects ctx.invoked_subcommand.
+
+        isatty is forced True so that the *subcommand check* is what actually suppresses
+        the hint, not the TTY gate. Otherwise this test would pass for the wrong reason
+        (CliRunner streams are non-TTY).
         """
         from give_back.cli import cli as cli_group
 
@@ -287,6 +307,8 @@ class TestMissingSkillHint:
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
             patch("give_back.cli.skill.SKILL_INSTALL_DIR", target_dir),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
         ):
             runner = CliRunner()
             # Invoke `give-back skill uninstall` (skill not installed → would
@@ -296,6 +318,140 @@ class TestMissingSkillHint:
         assert result.exit_code == 0
         # Hint should NOT appear because invoked_subcommand was "skill"
         assert "Tip: run 'give-back skill install'" not in buf.getvalue()
+
+
+class TestSkillHintTtyGate:
+    """Tests for the isatty gate on _check_skill_installed_hint().
+
+    The gate is the production fix that prevents the advisory hint from leaking
+    into captured output (pipes, 2>&1 merges, subprocess capture, CI).
+    """
+
+    def _make_capture_console(self) -> tuple[Console, io.StringIO]:
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+        return console, buf
+
+    def test_hint_suppressed_when_stdout_not_tty(self, tmp_path):
+        """Non-TTY stdout → no hint. Covers `cmd --json | jq` and friends."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=False),
+            patch("give_back.cli._stderr_isatty", return_value=True),
+        ):
+            _check_skill_installed_hint()
+
+        assert buf.getvalue() == ""
+
+    def test_hint_suppressed_when_stderr_not_tty(self, tmp_path):
+        """Non-TTY stderr → no hint. Covers `cmd 2>err.log` noise prevention."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=False),
+        ):
+            _check_skill_installed_hint()
+
+        assert buf.getvalue() == ""
+
+    def test_hint_prints_when_both_ttys(self, tmp_path):
+        """Belt-and-braces: both TTYs true → hint prints. (Already covered
+        by TestMissingSkillHint, restated here for gate completeness.)"""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
+        ):
+            _check_skill_installed_hint()
+
+        assert "Tip: run 'give-back skill install'" in buf.getvalue()
+
+
+class TestSkillHintEnvVarOverride:
+    """Tests for the GIVE_BACK_HINTS env var override on the isatty gate."""
+
+    def _make_capture_console(self) -> tuple[Console, io.StringIO]:
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+        return console, buf
+
+    def test_env_var_always_forces_print_even_non_tty(self, tmp_path):
+        """GIVE_BACK_HINTS=always bypasses the isatty gate entirely."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=False),
+            patch("give_back.cli._stderr_isatty", return_value=False),
+            patch.dict("os.environ", {"GIVE_BACK_HINTS": "always"}),
+        ):
+            _check_skill_installed_hint()
+
+        assert "Tip: run 'give-back skill install'" in buf.getvalue()
+
+    def test_env_var_never_suppresses_even_tty(self, tmp_path):
+        """GIVE_BACK_HINTS=never forces the hint off even in a terminal."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch.dict("os.environ", {"GIVE_BACK_HINTS": "never"}),
+        ):
+            _check_skill_installed_hint()
+
+        assert buf.getvalue() == ""
+
+    def test_env_var_auto_matches_default(self, tmp_path):
+        """GIVE_BACK_HINTS=auto is identical to the unset default: gated on isattys."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        console, buf = self._make_capture_console()
+
+        # auto + non-TTY stdout → suppressed (same as default)
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console),
+            patch("give_back.cli._stdout_isatty", return_value=False),
+            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch.dict("os.environ", {"GIVE_BACK_HINTS": "auto"}),
+        ):
+            _check_skill_installed_hint()
+        assert buf.getvalue() == ""
+
+        # auto + both TTYs → prints (same as default)
+        console2, buf2 = self._make_capture_console()
+        with (
+            patch("give_back.cli.Path.home", return_value=fake_home),
+            patch("give_back.console.stderr_console", console2),
+            patch("give_back.cli._stdout_isatty", return_value=True),
+            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch.dict("os.environ", {"GIVE_BACK_HINTS": "auto"}),
+        ):
+            _check_skill_installed_hint()
+        assert "Tip: run 'give-back skill install'" in buf2.getvalue()
 
 
 class TestIsEditableInstall:

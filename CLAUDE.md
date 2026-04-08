@@ -62,6 +62,11 @@ list in `signals/__init__.py`.
   no side effects, no global state.
 - **Atomic state writes.** `state.py` writes to a temp file then renames to prevent
   corruption from Ctrl+C.
+- **Output contract.** Under `--json`, stdout is strictly a JSON document. Stderr
+  carries advisory hints (TTY-gated via `_check_skill_installed_hint`) and operational
+  warnings (always). When adding new CLI output, decide: is it an *advisory hint* (human
+  UX) or an *operational warning* (signal)? Hints get TTY-gated; warnings don't. See
+  the "Machine-readable output (`--json`)" section in README.md for the full contract.
 
 ## Commands
 

@@ -264,6 +264,42 @@ give-back calibrate calibration.yml
 | 2 | Partial assessment (some signals failed) |
 | 3 | Gate failed (RED tier) |
 
+## Machine-readable output (`--json`)
+
+Commands that support `--json` (`assess`, `prepare`, `triage`, `sniff`, `status`,
+`audit`, `discover`) emit a single JSON document on stdout. This is a stable
+contract for subprocess callers, log pipelines, and agents:
+
+- **stdout under `--json`** is strictly JSON. No hints, no banners, no prompts.
+  Parseable by `json.loads` / `jq` without stripping or filtering.
+- **stderr** carries two distinct kinds of output:
+  - **Advisory hints** (e.g. "Tip: run `give-back skill install`") —
+    purely for interactive humans. Suppressed when either stdout or stderr
+    is not a TTY, so they never leak into captured output, pipes,
+    `2>&1` merges, subprocess wrappers, or CI logs.
+  - **Operational warnings** (e.g. "corrupt context.json, skipping") —
+    always printed. These are signal, not chatter, and belong in logs.
+- **Merged streams** (`cmd --json 2>&1 | jq`) are safe for the hint path
+  (hint is suppressed), but warnings still go to stderr by design — if a
+  warning fires, merging will produce non-JSON output. That's the caller's
+  choice: if you merge streams, you accept the trade-off for warnings.
+
+### Hint override
+
+Set `GIVE_BACK_HINTS` to override the default isatty-based hint gating:
+
+| Value | Behavior |
+|---|---|
+| `auto` (default) | Print the hint only when both stdout and stderr are TTYs |
+| `always` | Force the hint to print, even in non-interactive contexts (useful for CI onboarding nags or debugging "why don't I see the hint?") |
+| `never` | Force the hint off, even in a terminal (useful for scripted sessions or strict log pipelines) |
+
+Example: in a CI job where you *want* the hint visible in captured logs:
+
+```bash
+GIVE_BACK_HINTS=always give-back assess pallets/flask
+```
+
 ## Claude Code skill
 
 give-back includes a [Claude Code](https://github.com/anthropics/claude-code) skill that
