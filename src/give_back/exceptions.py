@@ -52,3 +52,21 @@ class WorkspaceError(GiveBackError):
 
 class SubmitError(GiveBackError):
     """PR submission failed — push error, gh CLI issue, or missing context."""
+
+
+class GitHubServerError(GiveBackError):
+    """GitHub API returned a 5xx response — transient, potentially retryable."""
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+        """HTTP status code from the response."""
+
+
+class GitHubClientError(GiveBackError):
+    """GitHub API returned a 4xx response other than 401/403/404/429 — not retryable."""
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+        """HTTP status code from the response."""

@@ -28,7 +28,8 @@ import httpx
 
 from give_back.exceptions import (
     AuthenticationError,
-    GiveBackError,
+    GitHubClientError,
+    GitHubServerError,
     GraphQLError,
     RateLimitError,
     RepoNotFoundError,
@@ -172,7 +173,6 @@ class GitHubClient:
         self._check_rate_limit()
 
         backoff = _INITIAL_BACKOFF
-        last_exception: Exception | None = None
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -182,8 +182,7 @@ class GitHubClient:
                 self._handle_error_status(response)
                 return response
 
-            except httpx.TimeoutException as exc:
-                last_exception = exc
+            except httpx.TimeoutException:
                 if attempt < _MAX_RETRIES:
                     time.sleep(backoff)
                     backoff *= 2
@@ -191,15 +190,16 @@ class GitHubClient:
                     raise
 
             except RateLimitError as exc:
-                last_exception = exc
                 if exc.reset_at and attempt < _MAX_RETRIES:
                     wait = max(0, exc.reset_at - int(time.time())) + 1
                     time.sleep(min(wait, 120))  # Cap at 120s to guard against clock skew
                 else:
                     raise
 
-        # Should not reach here, but satisfy type checker
-        raise last_exception  # type: ignore[misc]
+        # Every terminal path in the loop above either returns or raises.
+        # This line is unreachable; keep it as an explicit error in case a
+        # future refactor adds a branch that forgets to raise.
+        raise RuntimeError("unreachable: retry loop exited without return or raise")
 
     def _handle_error_status(self, response: httpx.Response) -> None:
         """Raise appropriate exceptions for HTTP error status codes."""
@@ -223,9 +223,18 @@ class GitHubClient:
             reset_at = int(time.time()) + int(retry_after) if retry_after else None
             raise RateLimitError("GitHub API rate limit exceeded (429).", reset_at=reset_at)
 
-        # Wrap any remaining error status codes (e.g. 500, 502, 422)
+        # Split remaining error codes: 5xx = retryable server error, other 4xx = client error.
+        if 500 <= response.status_code < 600:
+            raise GitHubServerError(
+                f"GitHub API {response.status_code} for {response.url}: {response.text[:200]}",
+                status_code=response.status_code,
+            )
+
         if response.status_code >= 400:
-            raise GiveBackError(f"GitHub API error ({response.status_code}) for {response.url}: {response.text[:200]}")
+            raise GitHubClientError(
+                f"GitHub API {response.status_code} for {response.url}: {response.text[:200]}",
+                status_code=response.status_code,
+            )
 
     def _update_rate_limit(self, response: httpx.Response) -> None:
         """Update core rate limit tracking from response headers.

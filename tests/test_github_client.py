@@ -6,6 +6,8 @@ import respx
 
 from give_back.exceptions import (
     AuthenticationError,
+    GitHubClientError,
+    GitHubServerError,
     GiveBackError,
     GraphQLError,
     RateLimitError,
@@ -238,29 +240,39 @@ class TestRetry:
 
 
 class TestUnhandledStatusCodes:
-    """Verify that HTTP status codes not explicitly handled (500, 502, 422) raise GiveBackError."""
+    """5xx responses raise GitHubServerError; other 4xx raise GitHubClientError.
+
+    Both inherit from GiveBackError so existing catch-all handlers keep working.
+    """
 
     @respx.mock
-    def test_500_raises_giveback_error(self, client):
+    def test_500_raises_server_error(self, client):
         respx.get("https://api.github.com/repos/test/repo").mock(
             return_value=httpx.Response(500, text="Internal Server Error")
         )
-        with pytest.raises(GiveBackError, match="500"):
+        with pytest.raises(GitHubServerError, match="500") as exc_info:
             client.rest_get("/repos/test/repo")
+        assert exc_info.value.status_code == 500
+        # Backward compat: still catchable as GiveBackError.
+        assert isinstance(exc_info.value, GiveBackError)
 
     @respx.mock
-    def test_502_raises_giveback_error(self, client):
+    def test_502_raises_server_error(self, client):
         respx.get("https://api.github.com/repos/test/repo").mock(return_value=httpx.Response(502, text="Bad Gateway"))
-        with pytest.raises(GiveBackError, match="502"):
+        with pytest.raises(GitHubServerError, match="502") as exc_info:
             client.rest_get("/repos/test/repo")
+        assert exc_info.value.status_code == 502
 
     @respx.mock
-    def test_422_raises_giveback_error(self, client):
+    def test_422_raises_client_error(self, client):
         respx.get("https://api.github.com/repos/test/repo").mock(
             return_value=httpx.Response(422, json={"message": "Validation Failed"})
         )
-        with pytest.raises(GiveBackError, match="422"):
+        with pytest.raises(GitHubClientError, match="422") as exc_info:
             client.rest_get("/repos/test/repo")
+        assert exc_info.value.status_code == 422
+        # Backward compat: still catchable as GiveBackError.
+        assert isinstance(exc_info.value, GiveBackError)
 
     @respx.mock
     def test_error_message_includes_url(self, client):
