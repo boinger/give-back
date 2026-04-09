@@ -146,10 +146,10 @@ def _push_branch(workspace_dir: Path, branch_name: str) -> None:
             capture_output=True,
             text=True,
             cwd=workspace_dir,
-            timeout=60,
+            timeout=300,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SubmitError("git push timed out after 60s") from exc
+        raise SubmitError("git push timed out after 300s") from exc
     except FileNotFoundError as exc:
         raise SubmitError("git is not installed") from exc
 
