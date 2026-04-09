@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# give-back pre-commit hook — fast format check only.
+# Fires on every `git commit`. Keep this under ~500ms or it trains --no-verify.
+# Bypass: git commit --no-verify
+set -e
+
+if ! command -v make >/dev/null 2>&1; then
+  echo "ERROR: 'make' not found. Cannot run format check." >&2
+  echo "Recover with: git config --unset core.hooksPath  (or use --no-verify)" >&2
+  exit 1
+fi
+
+exec make ci-fast

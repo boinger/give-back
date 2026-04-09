@@ -1,0 +1,5 @@
+# Ensure shell scripts always use LF line endings, even on Windows clones.
+# CRLF corrupts `#!/usr/bin/env bash` shebangs and makes hooks unexecutable.
+.githooks/*       text eol=lf
+scripts/*.sh      text eol=lf
+tests/*.sh        text eol=lf

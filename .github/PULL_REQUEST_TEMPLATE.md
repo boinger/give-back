@@ -8,6 +8,6 @@
 
 ## Checklist
 
-- [ ] `make pre-commit` passes (format + lint + tests)
+- [ ] `make ci` passes (lint + format-check + tests) — the git pre-push hook enforces this automatically
 - [ ] Tests added or updated for changed behavior
 - [ ] Documentation updated if needed

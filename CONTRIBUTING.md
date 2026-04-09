@@ -15,10 +15,27 @@ uv sync --group dev
 ## Before you submit
 
 ```bash
-make pre-commit
+make ci
 ```
 
-This runs format, lint, and the full test suite. Everything must pass.
+This runs `ruff check`, `ruff format --check`, and the full test suite —
+exactly the same checks CI runs. Everything must pass.
+
+If `make ci` fails on formatting, run `make fix` to auto-format and
+auto-fix ruff lint issues, then re-run `make ci`.
+
+`make pre-commit` is kept as a backward-compat alias.
+
+### Git hooks
+
+`make dev` installs two git hooks automatically:
+
+- **pre-commit** runs a fast format check (`make ci-fast`) on every commit.
+- **pre-push** runs the full `make ci` on every push.
+
+You can bypass per-commit/per-push with `--no-verify`, or disable hooks
+entirely for a clone with `git config --unset core.hooksPath`. The hooks
+are tracked in `.githooks/`, so fixes propagate automatically.
 
 ## Code style
 
@@ -64,7 +81,8 @@ touched, write them. We use pytest with respx for HTTP mocking.
 
 ```bash
 make test          # run tests
-make pre-commit    # format + lint + test
+make ci            # CI-equivalent checks (lint + format-check + test)
+make fix           # auto-format + auto-fix ruff lint issues
 ```
 
 ## No paperwork

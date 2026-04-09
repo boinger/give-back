@@ -317,7 +317,37 @@ contribute to grafana/alloy."
 ## Development
 
 ```bash
-make pre-commit    # format + lint + test (794 tests)
+make dev           # install dev deps + auto-install git hooks
+make ci            # run CI-equivalent checks (lint + format-check + test)
+make fix           # auto-format + auto-fix ruff lint issues
 make test          # tests only
-make lint          # ruff check + format
+make lint          # ruff check only
 ```
+
+### Git hooks
+
+`make dev` installs two git hooks via `core.hooksPath` (tracked in
+`.githooks/`, not the default `.git/hooks/` so they survive fresh clones
+once `make dev` runs):
+
+- **pre-commit** runs `make ci-fast` — fast format check only, well under
+  a second. Fires on every `git commit`.
+- **pre-push** runs `make ci` — full lint + format-check + test, same as
+  CI. Fires once per `git push`.
+
+The hooks exist because pushing code that fails CI wastes a round-trip.
+They catch format drift and broken tests before you hit the network.
+
+**Bypass** when you need to:
+
+```bash
+git commit --no-verify -m "..."    # skip pre-commit for one commit
+git push --no-verify               # skip pre-push for one push
+git config --unset core.hooksPath  # disable hooks entirely for this clone
+```
+
+If `make ci` or `make ci-fast` fails because `uv` or `ruff` isn't
+installed yet (fresh machine), either install them first or temporarily
+unset `core.hooksPath` while bootstrapping.
+
+`make pre-commit` is kept as a backward-compat alias to `make ci`.

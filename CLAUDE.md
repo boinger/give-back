@@ -71,7 +71,10 @@ list in `signals/__init__.py`.
 ## Commands
 
 ```bash
-make pre-commit    # format + lint + test
+make ci            # CI-equivalent: lint + format-check + test (read-only). Git pre-push hook runs this.
+make ci-fast       # Fast format-check only. Git pre-commit hook runs this.
+make fix           # Auto-format + auto-fix ruff lint issues.
+make pre-commit    # Alias for 'make ci' — kept for muscle memory.
 make test          # run tests
 make lint          # run ruff
 make run ARGS='assess pallets/flask'       # viability gate
