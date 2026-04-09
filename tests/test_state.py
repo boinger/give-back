@@ -205,6 +205,51 @@ class TestParseConfigYaml:
         config = _parse_config_yaml(content)
         assert config.handoff_command == "code ."
 
+    def test_handoff_value_with_embedded_colon(self):
+        """Values containing `:` inside quotes must survive split(":", 1)."""
+        content = 'handoff:\n  command: "cursor --flag foo:bar"'
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "cursor --flag foo:bar"
+
+    def test_crlf_line_endings(self):
+        """Windows-style line endings parse identically to LF."""
+        content = 'workspace_dir: ~/ws\r\nhandoff:\r\n  command: "code ."\r\n'
+        config = _parse_config_yaml(content)
+        assert config.workspace_dir == "~/ws"
+        assert config.handoff_command == "code ."
+
+    def test_trailing_whitespace_after_value(self):
+        """Trailing spaces after the value must be stripped."""
+        content = 'handoff:\n  command: "code ."   \n'
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "code ."
+
+    def test_tab_indented_command(self):
+        """Tab indentation is valid YAML — must parse."""
+        content = "handoff:\n\tcommand: cursor\n"
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "cursor"
+
+    def test_bom_prefix(self):
+        """UTF-8 BOM at start of file must not break parsing."""
+        content = '\ufeffworkspace_dir: ~/ws\nhandoff:\n  command: "code ."'
+        config = _parse_config_yaml(content)
+        assert config.workspace_dir == "~/ws"
+        assert config.handoff_command == "code ."
+
+    def test_unterminated_quote(self):
+        """Unterminated quote parses leniently (no YAML error).
+
+        This documents current behavior: the trailing quote is missing, so
+        .strip(\"'\") only removes the leading quote and returns the rest
+        as-is. A stricter parser would reject this, but for a two-field
+        hand-rolled config, leniency is fine.
+        """
+        content = 'handoff:\n  command: "cursor .'
+        config = _parse_config_yaml(content)
+        # The parser strips the leading `"` only; the rest is preserved.
+        assert config.handoff_command == "cursor ."
+
 
 class TestLoadConfig:
     def test_missing_file_returns_defaults(self, state_dir):

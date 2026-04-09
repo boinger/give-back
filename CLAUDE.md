@@ -58,6 +58,11 @@ list in `signals/__init__.py`.
 
 - **No catch-all exceptions.** Every handler names the specific exception it catches.
   All custom exceptions inherit from `GiveBackError` in `exceptions.py`.
+  *Carve-out:* atomic-write helpers (`state.atomic_write_text`,
+  `audit_fix.templates.write_file`) catch `BaseException` so Ctrl+C between
+  `mkstemp` and `replace` cleans up the stray `.tmp` file. Both sites
+  cleanup-and-reraise unchanged; never suppress. Do not replicate the pattern
+  elsewhere without the same justification.
 - **Signals are pure.** They receive `RepoData` and return `SignalResult`. No API calls,
   no side effects, no global state.
 - **Atomic state writes.** `state.py` writes to a temp file then renames to prevent

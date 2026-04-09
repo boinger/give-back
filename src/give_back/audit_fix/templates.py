@@ -298,6 +298,9 @@ def write_file(path: Path, content: str) -> None:
         with open(fd, "w") as f:
             f.write(content)
         Path(tmp_path).replace(path)
+    # Catch BaseException intentionally: the cleanup-and-reraise pattern must
+    # handle KeyboardInterrupt between mkstemp and replace, otherwise Ctrl+C
+    # leaves a stray .tmp file. See CLAUDE.md "No catch-all exceptions" carve-out.
     except BaseException:
         Path(tmp_path).unlink(missing_ok=True)
         raise
