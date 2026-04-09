@@ -10,7 +10,11 @@ No external dependencies beyond httpx (already in project deps).
 
 from __future__ import annotations
 
+import ipaddress
+import os
 import re
+import socket
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -28,10 +32,173 @@ _GO_IMPORT_RE = re.compile(
     re.IGNORECASE,
 )
 _GO_GET_TIMEOUT = 5.0
+_GO_GET_MAX_REDIRECTS = 5
 
 # Module-level cache: import-prefix → GitHub slug (or None for failed lookups).
 # Session-scoped — lives for one CLI invocation.
 _go_meta_cache: dict[str, str | None] = {}
+
+# Shared httpx Client for non-go resolvers (PyPI / crates / npm / rubygems).
+# Lazily initialized so tests can reset cleanly via _clear_http_client().
+_http_client: httpx.Client | None = None
+
+# Parsed GIVE_BACK_ALLOW_PRIVATE_HOSTS env var (cached per process).
+_ALLOWED_PRIVATE_HOSTS: frozenset[str] | None = None
+
+# Hosts we've already warned about for this process. Prevents log spam when
+# a single go.sum references the same private host multiple times.
+_allowlist_miss_warned: set[str] = set()
+
+
+def _get_client() -> httpx.Client:
+    """Return the shared httpx.Client, creating it lazily on first use.
+
+    Used by the non-go resolvers (PyPI / crates / npm / rubygems) to pool
+    TCP+TLS connections across calls. resolve_go_module does NOT use this
+    client — it routes through _safe_go_get() which disables redirects and
+    re-validates the host on every hop.
+    """
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.Client(
+            timeout=_PYPI_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": "give-back (https://github.com/boinger/give-back)"},
+        )
+    return _http_client
+
+
+def _clear_http_client() -> None:
+    """Test teardown helper — close and reset the shared client."""
+    global _http_client
+    if _http_client is not None:
+        _http_client.close()
+        _http_client = None
+
+
+def _get_allowed_private_hosts() -> frozenset[str]:
+    """Read GIVE_BACK_ALLOW_PRIVATE_HOSTS and cache the result.
+
+    Format: comma-separated list of hostnames, e.g.
+    ``go.company.internal,gitlab.internal``. Matching is case-insensitive
+    and exact (no subdomain wildcards — users list each host they need).
+    """
+    global _ALLOWED_PRIVATE_HOSTS
+    if _ALLOWED_PRIVATE_HOSTS is None:
+        raw = os.environ.get("GIVE_BACK_ALLOW_PRIVATE_HOSTS", "")
+        _ALLOWED_PRIVATE_HOSTS = frozenset(h.strip().lower() for h in raw.split(",") if h.strip())
+    return _ALLOWED_PRIVATE_HOSTS
+
+
+def _clear_allowlist() -> None:
+    """Test teardown helper — reset the cached allowlist and warn-set."""
+    global _ALLOWED_PRIVATE_HOSTS
+    _ALLOWED_PRIVATE_HOSTS = None
+    _allowlist_miss_warned.clear()
+
+
+def _warn_allowlist_miss(host: str) -> None:
+    """Emit a one-shot stderr warning the first time *host* is rejected.
+
+    Prevents silent failure when an enterprise user running an internal Go
+    module server hasn't set GIVE_BACK_ALLOW_PRIVATE_HOSTS yet — they see
+    the reason their host was skipped and the exact env var to set.
+    """
+    if host in _allowlist_miss_warned:
+        return
+    _allowlist_miss_warned.add(host)
+    from give_back.console import stderr_console
+
+    stderr_console.print(
+        f"[yellow]Warning:[/yellow] skipped private/internal host "
+        f"[bold]{host}[/bold] during Go module resolution. "
+        f"To allow it, set [bold]GIVE_BACK_ALLOW_PRIVATE_HOSTS={host}[/bold] "
+        f"(comma-separated for multiple hosts)."
+    )
+
+
+def _is_public_host(host: str) -> bool:
+    """Return True if *host* is safe to fetch.
+
+    Returns True when EITHER:
+      - The host is explicitly allowlisted via GIVE_BACK_ALLOW_PRIVATE_HOSTS, OR
+      - Every resolved IP for *host* is a public address.
+
+    Fails closed: on resolution error, unknown host, or empty host, returns False.
+    Emits a one-shot stderr warning the first time a private host is rejected
+    without being on the allowlist, so enterprise users see why their
+    internal server was skipped.
+
+    Multi-A-record guard: iterates ALL getaddrinfo entries and returns False
+    if ANY is private. This blocks the SSRF bypass where an attacker publishes
+    a DNS record with both a public and a private IP.
+    """
+    if not host:
+        return False
+
+    # Enterprise escape hatch: explicit per-host opt-in.
+    if host.lower() in _get_allowed_private_hosts():
+        return True
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+
+    has_any_private = False
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            has_any_private = True
+
+    if has_any_private:
+        _warn_allowlist_miss(host)
+        return False
+    return True
+
+
+def _safe_go_get(candidate: str) -> httpx.Response | None:
+    """Fetch ``https://{candidate}?go-get=1`` with SSRF protection.
+
+    Manual redirect handling: follow up to _GO_GET_MAX_REDIRECTS hops and
+    re-validate the host on every one. Returns None if any step targets a
+    non-public host, if the redirect chain exceeds the cap, or on any HTTP
+    error. Callers should treat None identically to the existing "continue"
+    path (try the next prefix candidate).
+
+    NOTE: this deliberately does NOT use the shared _get_client() — that
+    client has follow_redirects=True which would bypass the per-hop host check.
+    """
+    url = f"https://{candidate}?go-get=1"
+    for _ in range(_GO_GET_MAX_REDIRECTS + 1):
+        host = urlsplit(url).hostname or ""
+        if not _is_public_host(host):
+            return None
+        try:
+            resp = httpx.get(url, timeout=_GO_GET_TIMEOUT, follow_redirects=False)
+        except (httpx.HTTPError, httpx.TimeoutException):
+            return None
+        if resp.status_code in (301, 302, 303, 307, 308):
+            location = resp.headers.get("location")
+            if not location:
+                return None
+            # Resolve relative Location against the current URL.
+            url = str(httpx.URL(url).join(location))
+            continue
+        return resp
+    # Redirect chain exceeded the cap.
+    return None
 
 
 def resolve_pypi(package_name: str) -> str | None:
@@ -42,7 +209,7 @@ def resolve_pypi(package_name: str) -> str | None:
     """
     url = f"https://pypi.org/pypi/{package_name}/json"
     try:
-        response = httpx.get(url, timeout=_PYPI_TIMEOUT, follow_redirects=True)
+        response = _get_client().get(url)
     except httpx.TimeoutException:
         return None
     except httpx.HTTPError:
@@ -118,17 +285,14 @@ def _resolve_go_via_meta(module_path: str) -> str | None:
         if module_path == prefix or module_path.startswith(prefix + "/"):
             return slug
 
-    # Try progressively shorter paths until we get a valid go-import response
+    # Try progressively shorter paths until we get a valid go-import response.
+    # _safe_go_get handles SSRF protection (per-hop host validation + manual
+    # redirect loop with _GO_GET_MAX_REDIRECTS cap). None = skip this candidate.
     parts = module_path.split("/")
     for end in range(len(parts), 1, -1):
         candidate = "/".join(parts[:end])
-        try:
-            resp = httpx.get(
-                f"https://{candidate}?go-get=1",
-                timeout=_GO_GET_TIMEOUT,
-                follow_redirects=True,
-            )
-        except (httpx.HTTPError, httpx.TimeoutException):
+        resp = _safe_go_get(candidate)
+        if resp is None:
             continue
 
         if resp.status_code != 200:
@@ -162,12 +326,8 @@ def resolve_crates_io(crate_name: str) -> str | None:
     """
     url = f"https://crates.io/api/v1/crates/{crate_name}"
     try:
-        response = httpx.get(
-            url,
-            timeout=_PYPI_TIMEOUT,
-            follow_redirects=True,
-            headers={"User-Agent": "give-back (https://github.com/boinger/give-back)"},
-        )
+        # Shared client already sets the give-back User-Agent that crates.io requires.
+        response = _get_client().get(url)
     except (httpx.TimeoutException, httpx.HTTPError):
         return None
 
@@ -191,7 +351,7 @@ def resolve_npm(package_name: str) -> str | None:
     """
     url = f"https://registry.npmjs.org/{package_name}"
     try:
-        response = httpx.get(url, timeout=_PYPI_TIMEOUT, follow_redirects=True)
+        response = _get_client().get(url)
     except (httpx.TimeoutException, httpx.HTTPError):
         return None
 
@@ -222,7 +382,7 @@ def resolve_rubygems(gem_name: str) -> str | None:
     """
     url = f"https://rubygems.org/api/v1/gems/{gem_name}.json"
     try:
-        response = httpx.get(url, timeout=_PYPI_TIMEOUT, follow_redirects=True)
+        response = _get_client().get(url)
     except (httpx.TimeoutException, httpx.HTTPError):
         return None
 

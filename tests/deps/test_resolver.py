@@ -1,5 +1,8 @@
 """Tests for deps/resolver.py package resolution."""
 
+import socket
+from unittest.mock import patch
+
 import httpx
 import pytest
 import respx
@@ -14,13 +17,43 @@ from give_back.deps.resolver import (
     resolve_rubygems,
 )
 
+# Capture references to the real functions at module load time, before any
+# autouse fixture can replace them with mocks. SSRF-guard tests call these
+# directly to bypass the default "every host is public" patching.
+_REAL_IS_PUBLIC_HOST = resolver._is_public_host
+_REAL_SAFE_GO_GET = resolver._safe_go_get
+
 
 @pytest.fixture(autouse=True)
-def _clear_go_meta_cache():
-    """Clear the module-level go-import cache between tests."""
+def _reset_resolver_state():
+    """Reset module-level state between tests.
+
+    Clears:
+    - _go_meta_cache (prevents cross-test leakage of cached lookups)
+    - shared httpx Client (prevents pool reuse across tests)
+    - GIVE_BACK_ALLOW_PRIVATE_HOSTS cache
+    """
     resolver._go_meta_cache.clear()
+    resolver._clear_http_client()
+    resolver._clear_allowlist()
     yield
     resolver._go_meta_cache.clear()
+    resolver._clear_http_client()
+    resolver._clear_allowlist()
+
+
+@pytest.fixture(autouse=True)
+def _bypass_ssrf_check_by_default():
+    """By default, assume every host is public during testing.
+
+    Respx mocks HTTP traffic but not DNS; fake hostnames like
+    ``quirky.example.com`` would fail ``socket.getaddrinfo`` and be rejected
+    by ``_is_public_host``. Tests that specifically exercise the SSRF guard
+    override this by patching ``_is_public_host`` or ``socket.getaddrinfo``
+    locally inside the test function.
+    """
+    with patch.object(resolver, "_is_public_host", return_value=True):
+        yield
 
 
 class TestResolvePyPI:
@@ -471,3 +504,134 @@ class TestResolveRubygems:
             )
         )
         assert resolve_rubygems("nope") is None
+
+
+class TestSSRFGuard:
+    """Coverage for _is_public_host, _safe_go_get, and the env-var allowlist.
+
+    Overrides the module-level `_bypass_ssrf_check_by_default` autouse fixture
+    with a no-op so the real guard runs. Each test patches
+    `socket.getaddrinfo` to supply controlled IPs.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _bypass_ssrf_check_by_default(self):
+        """Override: SSRF tests need the real _is_public_host to run."""
+        yield
+
+    def _make_addrinfo(self, ip: str):
+        """Build a single addrinfo tuple matching socket.getaddrinfo's shape."""
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (ip, 0))]
+
+    def _multi_addrinfo(self, *ips: str):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (ip, 0)) for ip in ips]
+
+    def test_rejects_aws_metadata_ip(self):
+        """Link-local AWS metadata address (169.254.169.254) is rejected."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("169.254.169.254")):
+            assert real_is_public_host("aws-metadata.example") is False
+
+    def test_rejects_private_ip(self):
+        """RFC1918 10.0.0.1 is rejected."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("10.0.0.1")):
+            assert real_is_public_host("internal.example") is False
+
+    def test_rejects_loopback_ipv4(self):
+        """127.0.0.1 is rejected."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("127.0.0.1")):
+            assert real_is_public_host("localhost") is False
+
+    def test_rejects_ipv6_loopback(self):
+        """IPv6 ::1 is rejected via ipaddress.is_loopback."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        addrinfo = [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::1", 0, 0, 0))]
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=addrinfo):
+            assert real_is_public_host("ip6-localhost") is False
+
+    def test_rejects_multi_a_record_with_private(self):
+        """DNS record with both public AND private IPs is rejected.
+
+        This is the SSRF bypass pattern where an attacker publishes a record
+        with multiple A values hoping the client picks the private one. Our
+        guard iterates all results and fails closed if ANY is private.
+        """
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch(
+            "give_back.deps.resolver.socket.getaddrinfo",
+            return_value=self._multi_addrinfo("1.2.3.4", "10.0.0.1"),
+        ):
+            assert real_is_public_host("sneaky.example") is False
+
+    def test_rejects_on_dns_failure(self):
+        """DNS resolution failure means the host is rejected (fail-closed)."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", side_effect=socket.gaierror("no such host")):
+            assert real_is_public_host("nonexistent.invalid") is False
+
+    def test_accepts_public_ip(self):
+        """Normal public IP is accepted."""
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("8.8.8.8")):
+            assert real_is_public_host("dns.google") is True
+
+    def test_allowlist_accepts_private_host(self, monkeypatch):
+        """GIVE_BACK_ALLOW_PRIVATE_HOSTS opts specific hosts past the guard."""
+        monkeypatch.setenv("GIVE_BACK_ALLOW_PRIVATE_HOSTS", "go.company.internal,gitlab.internal")
+        resolver._clear_allowlist()  # force re-read of env var
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        # Even though the IP is private, the host is on the allowlist.
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("10.0.0.5")):
+            assert real_is_public_host("go.company.internal") is True
+            assert real_is_public_host("gitlab.internal") is True
+        # But a different private host is still rejected.
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("10.0.0.6")):
+            assert real_is_public_host("not-on-allowlist.internal") is False
+
+    def test_allowlist_miss_emits_one_shot_warning(self, capsys):
+        """First rejection of a host emits a stderr warning; second is silent."""
+        resolver._clear_allowlist()
+        real_is_public_host = _REAL_IS_PUBLIC_HOST
+        with patch("give_back.deps.resolver.socket.getaddrinfo", return_value=self._make_addrinfo("10.0.0.5")):
+            # First call — warns.
+            real_is_public_host("internal.example")
+            first_err = capsys.readouterr().err
+            assert "GIVE_BACK_ALLOW_PRIVATE_HOSTS" in first_err
+            assert "internal.example" in first_err
+            # Second call — same host, no new warning.
+            real_is_public_host("internal.example")
+            second_err = capsys.readouterr().err
+            assert second_err == ""
+
+    @respx.mock
+    def test_safe_go_get_rejects_redirect_to_private(self):
+        """Redirect from a public host to a private IP is rejected mid-chain."""
+        respx.get("https://public.example/pkg?go-get=1").mock(
+            return_value=httpx.Response(302, headers={"location": "https://internal.example/pkg?go-get=1"})
+        )
+
+        # Public host passes first check; internal.example resolves to private.
+        def fake_addrinfo(host, *args, **kwargs):
+            if host == "public.example":
+                return self._make_addrinfo("1.2.3.4")
+            return self._make_addrinfo("10.0.0.5")
+
+        with patch("give_back.deps.resolver.socket.getaddrinfo", side_effect=fake_addrinfo):
+            assert _REAL_SAFE_GO_GET("public.example/pkg") is None
+
+    @respx.mock
+    def test_safe_go_get_max_redirects_cap(self):
+        """_safe_go_get returns None after exceeding _GO_GET_MAX_REDIRECTS."""
+        # Each URL redirects to the next; build a chain longer than the cap.
+        chain = [f"https://public{i}.example/pkg?go-get=1" for i in range(10)]
+        for i, url in enumerate(chain[:-1]):
+            respx.get(url).mock(return_value=httpx.Response(302, headers={"location": chain[i + 1]}))
+        respx.get(chain[-1]).mock(return_value=httpx.Response(200, text="<meta name='go-import' content='x'>"))
+
+        with patch(
+            "give_back.deps.resolver.socket.getaddrinfo",
+            return_value=self._make_addrinfo("1.2.3.4"),
+        ):
+            assert _REAL_SAFE_GO_GET("public0.example/pkg") is None
