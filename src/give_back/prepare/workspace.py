@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from give_back._timeouts import NETWORK_SUBPROCESS_TIMEOUT
 from give_back.cli._shared import _GITHUB_REMOTE_URL_RE
 from give_back.conventions.models import BranchConvention
 from give_back.exceptions import WorkspaceError
@@ -79,10 +80,10 @@ def setup_workspace(
                 capture_output=True,
                 text=True,
                 cwd=clone_dir,
-                timeout=60,
+                timeout=NETWORK_SUBPROCESS_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            raise WorkspaceError("git fetch upstream timed out after 60s")
+            raise WorkspaceError(f"git fetch upstream timed out after {NETWORK_SUBPROCESS_TIMEOUT}s")
         if result.returncode != 0:
             raise WorkspaceError(f"git fetch upstream failed: {result.stderr.strip()}")
     else:
@@ -119,10 +120,10 @@ def setup_workspace(
                 capture_output=True,
                 text=True,
                 cwd=clone_dir,
-                timeout=60,
+                timeout=NETWORK_SUBPROCESS_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            raise WorkspaceError("git fetch upstream timed out after 60s")
+            raise WorkspaceError(f"git fetch upstream timed out after {NETWORK_SUBPROCESS_TIMEOUT}s")
         if result.returncode != 0:
             raise WorkspaceError(f"git fetch upstream failed: {result.stderr.strip()}")
 
@@ -167,10 +168,10 @@ def setup_workspace(
                 capture_output=True,
                 text=True,
                 cwd=clone_dir,
-                timeout=60,
+                timeout=NETWORK_SUBPROCESS_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            raise WorkspaceError("git pull --rebase timed out after 60s")
+            raise WorkspaceError(f"git pull --rebase timed out after {NETWORK_SUBPROCESS_TIMEOUT}s")
         if result.returncode != 0:
             raise WorkspaceError(f"git pull --rebase failed (possible conflict): {result.stderr.strip()}")
     else:

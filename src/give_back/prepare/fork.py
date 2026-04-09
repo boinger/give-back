@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from give_back._timeouts import NETWORK_SUBPROCESS_TIMEOUT
 from give_back.exceptions import ForkError
 
 
@@ -73,10 +74,10 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
             ["gh", "repo", "fork", f"{owner}/{repo}", "--clone=false"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=NETWORK_SUBPROCESS_TIMEOUT,
         )
     except subprocess.TimeoutExpired:
-        raise ForkError("gh repo fork timed out after 60s")
+        raise ForkError(f"gh repo fork timed out after {NETWORK_SUBPROCESS_TIMEOUT}s")
     if result.returncode != 0:
         raise ForkError(f"Fork failed: {result.stderr.strip()}")
 

@@ -19,6 +19,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from give_back._timeouts import NETWORK_SUBPROCESS_TIMEOUT
 from give_back.exceptions import SubmitError
 from give_back.prepare.lifecycle import update_context_status
 
@@ -146,10 +147,10 @@ def _push_branch(workspace_dir: Path, branch_name: str) -> None:
             capture_output=True,
             text=True,
             cwd=workspace_dir,
-            timeout=300,
+            timeout=NETWORK_SUBPROCESS_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SubmitError("git push timed out after 300s") from exc
+        raise SubmitError(f"git push timed out after {NETWORK_SUBPROCESS_TIMEOUT}s") from exc
     except FileNotFoundError as exc:
         raise SubmitError("git is not installed") from exc
 
@@ -238,10 +239,10 @@ def _create_pr(
                 capture_output=True,
                 text=True,
                 cwd=workspace_dir,
-                timeout=60,
+                timeout=NETWORK_SUBPROCESS_TIMEOUT,
             )
         except subprocess.TimeoutExpired as exc:
-            raise SubmitError("gh pr create timed out after 60s") from exc
+            raise SubmitError(f"gh pr create timed out after {NETWORK_SUBPROCESS_TIMEOUT}s") from exc
         except FileNotFoundError as exc:
             raise SubmitError("gh CLI required. Install: https://cli.github.com") from exc
 
