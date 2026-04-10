@@ -310,6 +310,128 @@ class TestDiscoverRepos:
         assert len(summary.results) == 3
 
 
+class TestDiscoverReposAnyIssues:
+    """T5-T8: --any-issues mode and verbose output."""
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_any_issues_single_query_no_label_gate(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T5: any_issues=True → single query, no Q2 fallback, label_gate_active=False."""
+        mock_assess.return_value = _make_assessment("owner", "repo")
+        repos = [_make_repo_dict("owner/repo")]
+
+        queries_seen: list[str] = []
+
+        def _tracking_search(query, per_page=30, sort="stars"):
+            queries_seen.append(query)
+            return {"total_count": len(repos), "items": repos}
+
+        client = _make_mock_client(repos)
+        client.search_repos = _tracking_search
+
+        summary = discover_repos(client, language="python", limit=1, any_issues=True)
+
+        assert summary.label_gate_active is False
+        assert len(queries_seen) == 1  # Only one query, no Q2
+        assert "good-first-issues" not in queries_seen[0]
+        assert "help-wanted-issues" not in queries_seen[0]
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_cache_key_differs_gated_vs_ungated(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T6: any_issues and non-any_issues use different cache keys."""
+        mock_assess.return_value = _make_assessment()
+        repos = [_make_repo_dict("owner/repo")]
+        client = _make_mock_client(repos)
+
+        # Run with gate
+        discover_repos(client, language="python", limit=1, any_issues=False)
+        call1_hash = mock_save_disc.call_args_list[-1][0][0]
+
+        # Run without gate
+        discover_repos(client, language="python", limit=1, any_issues=True)
+        call2_hash = mock_save_disc.call_args_list[-1][0][0]
+
+        assert call1_hash != call2_hash, "Cache keys must differ between gated and ungated queries"
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_default_has_label_gate_active(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T7: REGRESSION — default discover_repos has label_gate_active=True."""
+        mock_assess.return_value = _make_assessment()
+        repos = [_make_repo_dict("owner/repo")]
+        client = _make_mock_client(repos)
+
+        summary = discover_repos(client, language="python", limit=1)
+
+        assert summary.label_gate_active is True
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_verbose_prints_queries(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc, capsys):
+        """T8: verbose=True prints query strings to stderr."""
+        mock_assess.return_value = _make_assessment()
+        repos = [_make_repo_dict("owner/repo")]
+        client = _make_mock_client(repos)
+
+        import io
+
+        from rich.console import Console
+
+        buf = io.StringIO()
+        test_console = Console(file=buf, force_terminal=False, width=200)
+
+        import give_back.discover.search as search_mod
+
+        original = search_mod._console
+        search_mod._console = test_console
+        try:
+            discover_repos(client, language="python", limit=1, verbose=True)
+        finally:
+            search_mod._console = original
+
+        output = buf.getvalue()
+        assert "Q1:" in output
+        assert "returned" in output
+
+
+class TestInteractiveLoopFlagPreservation:
+    """T15: Interactive loop re-entry preserves --any-issues flag."""
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_slice_results_preserves_label_gate(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T15: When the interactive loop slices results for a second batch,
+        the label_gate_active field is preserved from the original summary."""
+        mock_assess.return_value = _make_assessment()
+        repos = [_make_repo_dict(f"org/repo-{i}", stars=100 - i) for i in range(10)]
+        client = _make_mock_client(repos)
+
+        # First call with any_issues=True
+        summary = discover_repos(client, language="python", limit=5, any_issues=True)
+        assert summary.label_gate_active is False
+
+        # Simulate the interactive loop: get a new summary, then slice
+        new_summary = discover_repos(client, language="python", limit=10, any_issues=True)
+        sliced = new_summary.slice_results(
+            5,
+            prior_assessed=summary.assessed_count,
+            prior_cache_hits=summary.cache_hits,
+        )
+
+        assert sliced.label_gate_active is False, "Interactive loop second batch must preserve label_gate_active=False"
+
+
 class TestDiscoverResultDefaults:
     def test_default_fields(self):
         r = DiscoverResult(
@@ -334,6 +456,58 @@ class TestDiscoverSummaryDefaults:
         assert s.filtered_count == 0
         assert s.assessed_count == 0
         assert s.cache_hits == 0
+        assert s.label_gate_active is True
+
+
+class TestBuildQueryNoLabelGate:
+    """T4: _build_query with label_filter=None omits the label qualifier."""
+
+    def test_no_label_filter(self):
+        q = _build_query("python", "cli", 50, None)
+        assert "language:python" in q
+        assert "topic:cli" in q
+        assert "stars:>50" in q
+        assert "archived:false" in q
+        assert "good-first-issues" not in q
+        assert "help-wanted-issues" not in q
+
+
+class TestSliceResults:
+    """T9: DiscoverSummary.slice_results carries all fields."""
+
+    def test_slice_basic(self):
+        results = [
+            DiscoverResult(
+                owner=f"o{i}",
+                repo="r",
+                description="d",
+                stars=100 - i,
+                language="Go",
+                topics=[],
+                open_issue_count=10,
+                good_first_issue_count=0,
+            )
+            for i in range(5)
+        ]
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=100,
+            results=results,
+            filtered_count=2,
+            assessed_count=5,
+            cache_hits=3,
+            label_gate_active=False,
+        )
+        sliced = summary.slice_results(3, prior_assessed=2, prior_cache_hits=1)
+
+        assert len(sliced.results) == 2
+        assert sliced.results[0].owner == "o3"
+        assert sliced.total_searched == 100
+        assert sliced.filtered_count == 2
+        assert sliced.assessed_count == 3  # 5 - 2
+        assert sliced.cache_hits == 2  # 3 - 1
+        assert sliced.label_gate_active is False
+        assert sliced.query == "q"
 
 
 def _make_mock_client(

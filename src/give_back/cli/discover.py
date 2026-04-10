@@ -26,7 +26,8 @@ from give_back.github_client import GitHubClient
 @click.option("--json", "json_output", is_flag=True, help="Output raw JSON.")
 @click.option("--no-cache", is_flag=True, help="Skip all caches.")
 @click.option("--exclude-assessed", is_flag=True, help="Filter out repos already in assessment cache.")
-@click.option("--verbose", "-v", is_flag=True, help="Show viability pre-screen details.")
+@click.option("--any-issues", is_flag=True, help="Skip the good-first-issue / help-wanted label gate.")
+@click.option("--verbose", "-v", is_flag=True, help="Show search queries and viability pre-screen details.")
 def discover(
     language: str | None,
     topic: str | None,
@@ -37,12 +38,16 @@ def discover(
     json_output: bool,
     no_cache: bool,
     exclude_assessed: bool,
+    any_issues: bool,
     verbose: bool,
 ) -> None:
     """Find open-source repos worth contributing to.
 
-    Searches GitHub for repos with good-first-issue labels, recent activity,
-    and viable contribution signals. Pre-screens each result for viability.
+    Searches GitHub for repos matching your filters, recent activity, and
+    viable contribution signals. By default, results are limited to repos
+    with open "good first issue" or "help wanted" labels. Use --any-issues
+    to bypass this label gate (useful for mature projects that use custom
+    label taxonomies).
 
     Examples:
 
@@ -51,6 +56,8 @@ def discover(
         give-back discover --topic kubernetes --min-stars 100
 
         give-back discover --language rust --limit 5 --interactive
+
+        give-back discover --topic pi-hole --any-issues
     """
     from give_back.discover.search import discover_repos
     from give_back.output import print_discover, print_discover_json
@@ -72,12 +79,14 @@ def discover(
                 batch_size=batch_size,
                 no_cache=no_cache,
                 exclude_assessed=exclude_assessed,
+                any_issues=any_issues,
+                verbose=verbose,
             )
 
             if json_output:
                 print_discover_json(summary)
             else:
-                print_discover(summary, verbose=verbose)
+                print_discover(summary, verbose=verbose, limit=limit)
 
                 # Interactive loop — assess additional batches
                 if interactive and not json_output and sys.stdin.isatty():
@@ -101,19 +110,17 @@ def discover(
                             batch_size=batch_size,
                             no_cache=False,
                             exclude_assessed=exclude_assessed,
+                            any_issues=any_issues,
+                            verbose=verbose,
                         )
                         # Only display the new repos (skip already-shown ones)
-                        from give_back.discover.search import DiscoverSummary
-
-                        new_only = DiscoverSummary(
-                            query=new_summary.query,
-                            total_searched=new_summary.total_searched,
-                            results=new_summary.results[shown_count:],
-                            assessed_count=new_summary.assessed_count - summary.assessed_count,
-                            cache_hits=new_summary.cache_hits - summary.cache_hits,
+                        new_only = new_summary.slice_results(
+                            shown_count,
+                            prior_assessed=summary.assessed_count,
+                            prior_cache_hits=summary.cache_hits,
                         )
                         if new_only.results:
-                            print_discover(new_only, verbose=verbose)
+                            print_discover(new_only, verbose=verbose, limit=limit)
                         else:
                             _console.print("  [dim]No more repos to assess.[/dim]")
                             break

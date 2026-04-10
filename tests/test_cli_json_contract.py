@@ -39,8 +39,8 @@ class TestJsonContractUnit:
 
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
-            patch("give_back.cli._stdout_isatty", return_value=False),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=False),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 

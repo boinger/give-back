@@ -98,10 +98,18 @@ Don't have a repo in mind? Search for one.
 give-back discover --language python
 give-back discover --topic kubernetes --min-stars 100
 give-back discover --language rust --limit 5 --interactive
+give-back discover --topic pi-hole --any-issues    # skip the label gate
 ```
 
 Each result is pre-screened for contribution viability. Use `--interactive` to
 assess more repos in batches.
+
+**Label gate:** By default, `discover` only returns repos with open issues
+labeled "good first issue" or "help wanted". This is a strong friendliness
+signal, but mature projects (e.g. Pi-hole, Kubernetes) often retire stock
+labels in favor of custom taxonomies. If you're looking for a well-known
+project and it doesn't appear, use `--any-issues` to bypass the label gate,
+or `give-back assess <owner/repo>` to check it directly.
 
 ### 2. Assess viability
 

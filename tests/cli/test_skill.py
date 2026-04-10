@@ -217,8 +217,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -235,8 +235,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -253,8 +253,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -276,8 +276,8 @@ class TestMissingSkillHint:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
             _check_skill_installed_hint()
@@ -307,8 +307,8 @@ class TestMissingSkillHint:
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
             patch("give_back.cli.skill.SKILL_INSTALL_DIR", target_dir),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             runner = CliRunner()
             # Invoke `give-back skill uninstall` (skill not installed → would
@@ -341,8 +341,8 @@ class TestSkillHintTtyGate:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=False),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=False),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -357,8 +357,8 @@ class TestSkillHintTtyGate:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=False),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=False),
         ):
             _check_skill_installed_hint()
 
@@ -374,8 +374,8 @@ class TestSkillHintTtyGate:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
         ):
             _check_skill_installed_hint()
 
@@ -399,8 +399,8 @@ class TestSkillHintEnvVarOverride:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=False),
-            patch("give_back.cli._stderr_isatty", return_value=False),
+            patch("give_back.hints._stdout_isatty", return_value=False),
+            patch("give_back.hints._stderr_isatty", return_value=False),
             patch.dict("os.environ", {"GIVE_BACK_HINTS": "always"}),
         ):
             _check_skill_installed_hint()
@@ -416,8 +416,8 @@ class TestSkillHintEnvVarOverride:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
             patch.dict("os.environ", {"GIVE_BACK_HINTS": "never"}),
         ):
             _check_skill_installed_hint()
@@ -434,8 +434,8 @@ class TestSkillHintEnvVarOverride:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console),
-            patch("give_back.cli._stdout_isatty", return_value=False),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=False),
+            patch("give_back.hints._stderr_isatty", return_value=True),
             patch.dict("os.environ", {"GIVE_BACK_HINTS": "auto"}),
         ):
             _check_skill_installed_hint()
@@ -446,8 +446,8 @@ class TestSkillHintEnvVarOverride:
         with (
             patch("give_back.cli.Path.home", return_value=fake_home),
             patch("give_back.console.stderr_console", console2),
-            patch("give_back.cli._stdout_isatty", return_value=True),
-            patch("give_back.cli._stderr_isatty", return_value=True),
+            patch("give_back.hints._stdout_isatty", return_value=True),
+            patch("give_back.hints._stderr_isatty", return_value=True),
             patch.dict("os.environ", {"GIVE_BACK_HINTS": "auto"}),
         ):
             _check_skill_installed_hint()

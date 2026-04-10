@@ -69,13 +69,33 @@ class DiscoverSummary:
     filtered_count: int = 0
     assessed_count: int = 0
     cache_hits: int = 0
+    label_gate_active: bool = True
+    """True when the search required good-first-issues / help-wanted labels."""
+
+    def slice_results(self, offset: int, prior_assessed: int = 0, prior_cache_hits: int = 0) -> "DiscoverSummary":
+        """Return a new summary containing only results after *offset*.
+
+        Carries all fields so callers don't silently drop newly added ones.
+        ``prior_assessed`` and ``prior_cache_hits`` are subtracted to yield
+        delta counts for the slice (matching the old manual-reconstruction
+        logic in the interactive loop).
+        """
+        return DiscoverSummary(
+            query=self.query,
+            total_searched=self.total_searched,
+            results=self.results[offset:],
+            filtered_count=self.filtered_count,
+            assessed_count=self.assessed_count - prior_assessed,
+            cache_hits=self.cache_hits - prior_cache_hits,
+            label_gate_active=self.label_gate_active,
+        )
 
 
 def _build_query(
     language: str | None,
     topic: str | None,
     min_stars: int,
-    label_filter: str,
+    label_filter: str | None = None,
 ) -> str:
     """Assemble a GitHub repository search query string.
 
@@ -83,7 +103,8 @@ def _build_query(
         language: Filter by primary language (e.g. "python").
         topic: Filter by topic (e.g. "cli").
         min_stars: Minimum star count.
-        label_filter: Either "good-first-issues:>0" or "help-wanted-issues:>0".
+        label_filter: ``"good-first-issues:>0"`` or ``"help-wanted-issues:>0"``.
+            Pass ``None`` to omit the label gate (``--any-issues`` mode).
 
     Returns:
         GitHub search query string.
@@ -97,7 +118,8 @@ def _build_query(
     if topic:
         parts.append(f"topic:{topic}")
     parts.append(f"stars:>{min_stars}")
-    parts.append(label_filter)
+    if label_filter:
+        parts.append(label_filter)
     parts.append("archived:false")
     parts.append(f"pushed:>{pushed_date}")
     parts.append("sort:stars")
@@ -131,6 +153,8 @@ def discover_repos(
     batch_size: int = _DEFAULT_BATCH_SIZE,
     no_cache: bool = False,
     exclude_assessed: bool = False,
+    any_issues: bool = False,
+    verbose: bool = False,
 ) -> DiscoverSummary:
     """Search GitHub for contribution-friendly repos and pre-screen viability.
 
@@ -143,13 +167,21 @@ def discover_repos(
         batch_size: Number of repos to assess in each API batch.
         no_cache: If True, skip the discover search cache (assessments still cached).
         exclude_assessed: If True, filter out repos that already have a cached assessment.
+        any_issues: If True, skip the good-first-issue / help-wanted label gate.
+        verbose: If True, print search query strings and hit counts to stderr.
 
     Returns:
         DiscoverSummary with ranked results.
     """
+    label_gate_active = not any_issues
+
     # Step 1: Build queries
-    q1 = _build_query(language, topic, min_stars, "good-first-issues:>0")
-    q2 = _build_query(language, topic, min_stars, "help-wanted-issues:>0")
+    if any_issues:
+        q1 = _build_query(language, topic, min_stars, None)
+        q2 = None  # No fallback query needed
+    else:
+        q1 = _build_query(language, topic, min_stars, "good-first-issues:>0")
+        q2 = _build_query(language, topic, min_stars, "help-wanted-issues:>0")
 
     # Step 2: Compute cache key from the primary query
     query_hash = hashlib.sha256(q1.encode()).hexdigest()[:16]
@@ -168,7 +200,7 @@ def discover_repos(
     if not used_cache:
         _console.print("[dim]Searching GitHub for contribution-friendly repos...[/dim]")
 
-        # Q1: good-first-issues
+        # Q1: primary query (good-first-issues, or unfiltered if --any-issues)
         try:
             q1_response = client.search_repos(q1, per_page=30)
             q1_items = q1_response.get("items", [])
@@ -176,28 +208,37 @@ def discover_repos(
             _log.warning("Q1 search failed: %s", exc)
             q1_items = []
 
-        for item in q1_items:
-            item["_from_gfi_query"] = True
+        if verbose:
+            label = "Query" if any_issues else "Q1"
+            _console.print(f"  [dim]{label}: {q1}  (returned {len(q1_items)})[/dim]")
+
+        if not any_issues:
+            for item in q1_items:
+                item["_from_gfi_query"] = True
         repos = list(q1_items)
 
-        # Q2: help-wanted if Q1 didn't return enough headroom
-        headroom = limit * 3
-        if len(repos) < headroom:
-            _log.debug("Q1 returned %d repos (need %d headroom), running Q2", len(repos), headroom)
-            try:
-                q2_response = client.search_repos(q2, per_page=30)
-                q2_items = q2_response.get("items", [])
-            except GiveBackError as exc:
-                _log.warning("Q2 search failed: %s", exc)
-                q2_items = []
+        # Q2: help-wanted fallback (skipped in --any-issues mode)
+        if q2 is not None:
+            headroom = limit * 3
+            if len(repos) < headroom:
+                _log.debug("Q1 returned %d repos (need %d headroom), running Q2", len(repos), headroom)
+                try:
+                    q2_response = client.search_repos(q2, per_page=30)
+                    q2_items = q2_response.get("items", [])
+                except GiveBackError as exc:
+                    _log.warning("Q2 search failed: %s", exc)
+                    q2_items = []
 
-            # Deduplicate by full_name
-            seen = {r.get("full_name") for r in repos}
-            for item in q2_items:
-                if item.get("full_name") not in seen:
-                    item["_from_hw_query"] = True
-                    repos.append(item)
-                    seen.add(item.get("full_name"))
+                if verbose:
+                    _console.print(f"  [dim]Q2: {q2}  (returned {len(q2_items)})[/dim]")
+
+                # Deduplicate by full_name
+                seen = {r.get("full_name") for r in repos}
+                for item in q2_items:
+                    if item.get("full_name") not in seen:
+                        item["_from_hw_query"] = True
+                        repos.append(item)
+                        seen.add(item.get("full_name"))
 
     total_searched = len(repos)
 
@@ -292,4 +333,5 @@ def discover_repos(
         filtered_count=filtered_count,
         assessed_count=assessed_count,
         cache_hits=cache_hits,
+        label_gate_active=label_gate_active,
     )

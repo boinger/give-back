@@ -7,6 +7,7 @@ import json
 from rich.table import Table
 
 from give_back.discover.search import DiscoverSummary
+from give_back.hints import emit_advisory
 from give_back.output._shared import _TIER_COLORS, _console
 
 
@@ -19,13 +20,18 @@ def _format_stars(count: int) -> str:
     return str(count)
 
 
-def print_discover(summary: DiscoverSummary, verbose: bool = False) -> None:
+def print_discover(summary: DiscoverSummary, verbose: bool = False, limit: int = 10) -> None:
     """Print a ranked discover table to the terminal."""
     _console.print()
-    _console.print(
-        f"  Found [bold]{summary.total_searched}[/bold] repos. "
-        f"Assessed {summary.assessed_count} ({summary.cache_hits} from cache)."
-    )
+    if summary.label_gate_active:
+        found = f"  Found [bold]{summary.total_searched}[/bold] repos"
+        found += ' with active "good first issue" / "help wanted" labels.'
+        _console.print(f"{found} Assessed {summary.assessed_count} ({summary.cache_hits} from cache).")
+    else:
+        _console.print(
+            f"  Found [bold]{summary.total_searched}[/bold] repos matching your filters (no label gate). "
+            f"Assessed {summary.assessed_count} ({summary.cache_hits} from cache)."
+        )
     _console.print()
 
     if not summary.results:
@@ -72,6 +78,16 @@ def print_discover(summary: DiscoverSummary, verbose: bool = False) -> None:
     _console.print("  Use [bold]give-back triage <repo>[/bold] to find starter issues.")
     _console.print()
 
+    # Sparse-result advisory: help users understand why canonical repos may be missing.
+    if summary.label_gate_active and len(summary.results) < min(limit, 5):
+        emit_advisory(
+            "\n  [dim]Tip: Mature projects often retire stock contribution labels. "
+            "To check a specific repo directly:[/dim]\n"
+            "    [dim]give-back assess <owner/repo>[/dim]\n"
+            "  [dim]To search without the label gate:[/dim]\n"
+            "    [dim]give-back discover --any-issues ...[/dim]\n"
+        )
+
 
 def print_discover_json(summary: DiscoverSummary) -> None:
     """Print discover results as JSON to stdout."""
@@ -81,6 +97,7 @@ def print_discover_json(summary: DiscoverSummary) -> None:
         "assessed_count": summary.assessed_count,
         "cache_hits": summary.cache_hits,
         "filtered_count": summary.filtered_count,
+        "label_gate_active": summary.label_gate_active,
         "results": [
             {
                 "owner": r.owner,
