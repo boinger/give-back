@@ -12,3 +12,4 @@ src/give_back/_version.py
 .ruff_cache/
 .env
 .env.*
+docs/superpowers/specs/
