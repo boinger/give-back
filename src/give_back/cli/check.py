@@ -8,6 +8,7 @@ import click
 
 from give_back.auth import resolve_token
 from give_back.console import stderr_console as _console
+from give_back.conventions.models import CLAInfo
 from give_back.exceptions import (
     AuthenticationError,
     GiveBackError,
@@ -15,15 +16,19 @@ from give_back.exceptions import (
 )
 from give_back.github_client import GitHubClient
 from give_back.output import print_check_results
+from give_back.state import atomic_write_text
 
 
 @click.command()
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed check results.")
-def check(verbose: bool) -> None:
+@click.option("--ack", "acknowledge", default=None, help="Acknowledge a guardrail (e.g., 'cla').")
+def check(verbose: bool, acknowledge: str | None) -> None:
     """Run pre-flight guardrail checks in a give-back workspace.
 
     Must be run from a directory prepared with `give-back prepare`.
     Reads .give-back/context.json to determine which checks apply.
+
+    Use --ack cla to acknowledge that you've signed the project's CLA.
     """
     import json
     import subprocess
@@ -60,8 +65,30 @@ def check(verbose: bool) -> None:
     branch_name = context.get("branch_name", "")
     default_branch = context.get("default_branch", "main")
     dco_required = context.get("dco_required", False)
-    cla_required = context.get("cla_required", False)
     ci_commands = context.get("ci_commands", [])
+
+    # Reconstruct CLAInfo from context.json fields
+    cla_info = CLAInfo(
+        required=context.get("cla_required", False),
+        system=context.get("cla_system") or "unknown",
+        signing_url=context.get("cla_signing_url"),
+    )
+    cla_acknowledged = context.get("cla_acknowledged", False)
+
+    # Handle --ack cla
+    if acknowledge == "cla":
+        if not cla_info.required:
+            _console.print("  No CLA required in this workspace — nothing to acknowledge.")
+            sys.exit(0)
+        context["cla_acknowledged"] = True
+        atomic_write_text(context_file, json.dumps(context, indent=2))
+        cla_acknowledged = True
+        _console.print("  [green]CLA acknowledged.[/green] Running checks...")
+        _console.print()
+    elif acknowledge is not None:
+        _console.print(f"[red]Error:[/red] Unknown guardrail to acknowledge: {acknowledge!r}")
+        _console.print("  Supported: 'cla'")
+        sys.exit(1)
 
     # 3. Gather current git state
     # Staged files
@@ -105,7 +132,7 @@ def check(verbose: bool) -> None:
     results: list = []
 
     results.append(check_staged_files_clean(staged_files))
-    results.append(check_cla_signed(cla_required))
+    results.append(check_cla_signed(cla_info, acknowledged=cla_acknowledged))
 
     if staged_files or commit_msg:
         results.append(check_dco_signoff(commit_msg, dco_required))

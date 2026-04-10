@@ -211,3 +211,33 @@ def test_context_defaults_without_lifecycle_params(tmp_path: Path) -> None:
     assert ctx["status"] == "working"
     assert ctx["fork_owner"] is None
     assert ctx["previous_issues"] == []
+
+
+def test_context_json_includes_cla_fields_when_required(tmp_path: Path) -> None:
+    """CLA system and signing URL appear in context.json when CLA is detected."""
+    from give_back.conventions.models import CLAInfo
+
+    workspace = _setup_git_dir(tmp_path)
+    brief = _make_brief(
+        cla_info=CLAInfo(required=True, system="cla-assistant", signing_url="https://cla-assistant.io/o/r")
+    )
+
+    write_brief(workspace, brief, issue_number=1, branch_name="fix/1-test", upstream_owner="pallets")
+
+    ctx = json.loads((workspace / ".give-back" / "context.json").read_text())
+    assert ctx["cla_required"] is True
+    assert ctx["cla_system"] == "cla-assistant"
+    assert ctx["cla_signing_url"] == "https://cla-assistant.io/o/r"
+
+
+def test_context_json_cla_fields_null_when_not_required(tmp_path: Path) -> None:
+    """CLA fields are null in context.json when no CLA is detected."""
+    workspace = _setup_git_dir(tmp_path)
+    brief = _make_brief()  # default: no CLA
+
+    write_brief(workspace, brief, issue_number=1, branch_name="fix/1-test", upstream_owner="pallets")
+
+    ctx = json.loads((workspace / ".give-back" / "context.json").read_text())
+    assert ctx["cla_required"] is False
+    assert ctx["cla_system"] is None
+    assert ctx["cla_signing_url"] is None

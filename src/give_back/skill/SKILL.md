@@ -205,12 +205,20 @@ specifically about `.gitignore`. For local-only exclusions (`.gstack/`,
 never gets committed upstream. `give-back prepare` already handles this
 for `.give-back/`.
 
+If the brief mentions a CLA signing URL, offer to open it in the browser:
+"This project requires a CLA. Want me to open the signing page?" If yes,
+run `open <url>`. This is purely advisory — prepare does NOT write any
+acknowledgment marker. After the user signs, they confirm with
+`give-back check --ack cla`.
+
 Tell the user:
 
 1. Where the workspace was created
 2. The branch name
 3. Key points from the brief (conventions to follow, test commands, etc.)
-4. "You're ready to start coding. When you're done, run `give-back check`
+4. If CLA is required: the signing URL and "After signing, run
+   `give-back check --ack cla` to confirm."
+5. "You're ready to start coding. When you're done, run `give-back check`
    from the workspace directory before submitting your PR."
 
 ### Step 6: Pre-flight checks (in workspace)

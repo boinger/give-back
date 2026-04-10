@@ -84,7 +84,10 @@ def _generate_notes(brief: ContributionBrief) -> list[str]:
     notes: list[str] = []
 
     if brief.cla_required:
-        notes.append("CLA (Contributor License Agreement) required — sign before your PR can be reviewed")
+        if brief.cla_info.signing_url:
+            notes.append(f"CLA required ({brief.cla_info.system}) — sign at: {brief.cla_info.signing_url}")
+        else:
+            notes.append("CLA required — check CONTRIBUTING.md for the signing link")
 
     if brief.dco_required:
         notes.append("DCO sign-off required (use `git commit -s`)")
@@ -189,7 +192,7 @@ def scan_conventions(
 
             # CLA
             try:
-                brief.cla_required = detect_cla(clone_dir, client=client, owner=owner, repo=repo)
+                brief.cla_info = detect_cla(clone_dir, client=client, owner=owner, repo=repo)
             except _EXPECTED_ERRORS:
                 _log.debug("CLA detection failed")
 

@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
+from give_back.conventions.models import CLAInfo
 from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
 
@@ -114,13 +115,14 @@ def check_dco_signoff(
     )
 
 
-def check_cla_signed(cla_required: bool) -> GuardrailResult:
-    """Remind the user to sign the CLA if the project requires one.
+def check_cla_signed(cla_info: CLAInfo, acknowledged: bool = False) -> GuardrailResult:
+    """Gate on CLA signing if the project requires one.
 
-    We can't verify CLA status programmatically (it's managed by external
-    services), so this is a WARN reminder, not a BLOCK.
+    When the CLA system is 'dco', returns INFO pointing at the separate
+    dco_signoff guardrail (avoids double-gating). When acknowledged is True
+    (user ran ``check --ack cla``), passes without blocking.
     """
-    if not cla_required:
+    if not cla_info.required:
         return GuardrailResult(
             name="cla_signed",
             severity=Severity.INFO,
@@ -128,13 +130,26 @@ def check_cla_signed(cla_required: bool) -> GuardrailResult:
             message="Project does not require a CLA.",
         )
 
+    if acknowledged:
+        return GuardrailResult(
+            name="cla_signed",
+            severity=Severity.INFO,
+            passed=True,
+            message="CLA acknowledged.",
+        )
+
+    msg = "This project requires a Contributor License Agreement (CLA)."
+    if cla_info.signing_url:
+        msg += f" Sign at: {cla_info.signing_url}"
+    else:
+        msg += " Check CONTRIBUTING.md for the signing link."
+    msg += " Then run: give-back check --ack cla"
+
     return GuardrailResult(
         name="cla_signed",
-        severity=Severity.WARN,
+        severity=Severity.BLOCK,
         passed=False,
-        message="This project requires a Contributor License Agreement (CLA). "
-        "Make sure you've signed it before submitting your PR, or the CLA bot "
-        "will block your review. Check the project's CONTRIBUTING.md or PR template for the signing link.",
+        message=msg,
     )
 
 

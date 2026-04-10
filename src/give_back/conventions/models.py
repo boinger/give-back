@@ -79,6 +79,19 @@ class ReviewInfo:
 
 
 @dataclass
+class CLAInfo:
+    """CLA system metadata — what to sign and where."""
+
+    required: bool = False
+    system: str = "unknown"
+    """One of: 'cla-assistant', 'easycla', 'google', 'apache', 'dco', 'unknown'"""
+    signing_url: str | None = None
+    """Direct URL to sign the CLA, or None if not derivable."""
+    detection_source: str = ""
+    """How we detected it: 'config-file', 'ci-workflow', 'pr-comment', 'contributing-md'"""
+
+
+@dataclass
 class ContributionBrief:
     """Complete convention scan output — the playbook for Phase 4."""
 
@@ -97,9 +110,14 @@ class ContributionBrief:
 
     style_info: StyleInfo = field(default_factory=StyleInfo)
     dco_required: bool = False
-    cla_required: bool = False
+    cla_info: CLAInfo = field(default_factory=CLAInfo)
     review_info: ReviewInfo = field(default_factory=ReviewInfo)
     notes: list[str] = field(default_factory=list)
 
     default_branch: str = "main"
     """The project's default branch name (for branching off of)."""
+
+    @property
+    def cla_required(self) -> bool:
+        """Backward-compat property — delegates to cla_info.required."""
+        return self.cla_info.required

@@ -212,6 +212,8 @@ def _build_context(
         "fork_owner": fork_owner,
         "dco_required": brief.dco_required,
         "cla_required": brief.cla_required,
+        "cla_system": brief.cla_info.system if brief.cla_required else None,
+        "cla_signing_url": brief.cla_info.signing_url if brief.cla_required else None,
         "test_command": brief.test_info.run_command,
         "lint_command": lint_cmd or None,
         "ci_commands": ci_commands,
