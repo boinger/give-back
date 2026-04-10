@@ -199,6 +199,12 @@ prepare will automatically handle the transition:
 If prepare reports archiving a previous issue, inform the user about the
 transition (e.g., "Archived issue #100, PR submitted at ...").
 
+**Do not add entries to .gitignore** unless the issue you're working on is
+specifically about `.gitignore`. For local-only exclusions (`.gstack/`,
+`.give-back/`, editor files, etc.), use `.git/info/exclude` instead — it
+never gets committed upstream. `give-back prepare` already handles this
+for `.give-back/`.
+
 Tell the user:
 
 1. Where the workspace was created
