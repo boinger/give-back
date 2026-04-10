@@ -95,6 +95,7 @@ make run ARGS='skip google/protobuf'      # add to skip list
 make run ARGS='unskip google/protobuf'    # remove from skip list
 make run ARGS='discover --language python' # find repos to contribute to
 make run ARGS='discover --topic cli --any-issues' # skip label gate for mature repos
+make run ARGS='discover --topic cli --no-auto-fallback' # disable auto-fallback
 make run ARGS='submit'                    # create PR from workspace
 make run ARGS='status'                    # check contribution status
 make run ARGS='audit pallets/flask'       # maintainer self-assessment checklist

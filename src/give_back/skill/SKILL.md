@@ -76,11 +76,11 @@ Present the results as recommendations: "Here are 5 repos that accept outside
 contributions." Highlight the ones with GREEN tier and suggest the user pick
 one. Once they choose, proceed to Step 1 with that repo.
 
-If results are sparse, note that `discover` only shows repos with stock
-"good first issue" / "help wanted" labels by default. Mature projects often
-use custom labels. Suggest `give-back discover --any-issues ...` to bypass
-the label gate, or `give-back assess <owner/repo>` to check a canonical
-project directly.
+When results are sparse, discover automatically searches without the label
+gate and shows additional repos in a second table ("Also found..."). This
+catches mature projects that retired stock "good first issue" / "help wanted"
+labels. If the user wants to disable auto-fallback, use `--no-auto-fallback`.
+For a complete bypass of the label gate, use `--any-issues`.
 
 If no results even with `--any-issues`, try broader filters or suggest the
 user name a repo directly.

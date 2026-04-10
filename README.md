@@ -104,12 +104,13 @@ give-back discover --topic pi-hole --any-issues    # skip the label gate
 Each result is pre-screened for contribution viability. Use `--interactive` to
 assess more repos in batches.
 
-**Label gate:** By default, `discover` only returns repos with open issues
-labeled "good first issue" or "help wanted". This is a strong friendliness
-signal, but mature projects (e.g. Pi-hole, Kubernetes) often retire stock
-labels in favor of custom taxonomies. If you're looking for a well-known
-project and it doesn't appear, use `--any-issues` to bypass the label gate,
-or `give-back assess <owner/repo>` to check it directly.
+**Label gate and auto-fallback:** By default, `discover` only returns repos
+with open issues labeled "good first issue" or "help wanted". When results
+are sparse, it automatically searches again without the label gate and shows
+additional repos in a second table. Use `--no-auto-fallback` to disable this,
+or `--any-issues` to bypass the label gate entirely. Mature projects (e.g.
+Pi-hole, Kubernetes) often retire stock labels, so the fallback catches them
+automatically.
 
 ### 2. Assess viability
 

@@ -27,6 +27,11 @@ from give_back.github_client import GitHubClient
 @click.option("--no-cache", is_flag=True, help="Skip all caches.")
 @click.option("--exclude-assessed", is_flag=True, help="Filter out repos already in assessment cache.")
 @click.option("--any-issues", is_flag=True, help="Skip the good-first-issue / help-wanted label gate.")
+@click.option(
+    "--auto-fallback/--no-auto-fallback",
+    default=None,
+    help="Auto-search without label gate when results are sparse.",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Show search queries and viability pre-screen details.")
 def discover(
     language: str | None,
@@ -39,6 +44,7 @@ def discover(
     no_cache: bool,
     exclude_assessed: bool,
     any_issues: bool,
+    auto_fallback: bool | None,
     verbose: bool,
 ) -> None:
     """Find open-source repos worth contributing to.
@@ -48,6 +54,11 @@ def discover(
     with open "good first issue" or "help wanted" labels. Use --any-issues
     to bypass this label gate (useful for mature projects that use custom
     label taxonomies).
+
+    When results are sparse, discover automatically searches without the
+    label gate and shows additional repos in a second table. Use
+    --no-auto-fallback to disable this, or --auto-fallback with --json
+    to enable it for machine-readable output.
 
     Examples:
 
@@ -66,6 +77,10 @@ def discover(
         _console.print("[red]Error:[/red] Provide at least --language or --topic to search.")
         sys.exit(1)
 
+    # Resolve tri-state: None → True for terminal, False for JSON
+    if auto_fallback is None:
+        auto_fallback = not json_output
+
     token = resolve_token()
 
     try:
@@ -81,6 +96,7 @@ def discover(
                 exclude_assessed=exclude_assessed,
                 any_issues=any_issues,
                 verbose=verbose,
+                auto_fallback=auto_fallback,
             )
 
             if json_output:
@@ -90,7 +106,7 @@ def discover(
 
                 # Interactive loop — assess additional batches
                 if interactive and not json_output and sys.stdin.isatty():
-                    shown_count = len(summary.results)
+                    shown_count = len(summary.results) + len(summary.fallback_results)
                     remaining = summary.total_searched - shown_count
                     while remaining > 0:
                         try:
@@ -112,6 +128,7 @@ def discover(
                             exclude_assessed=exclude_assessed,
                             any_issues=any_issues,
                             verbose=verbose,
+                            auto_fallback=auto_fallback,
                         )
                         # Only display the new repos (skip already-shown ones)
                         new_only = new_summary.slice_results(
@@ -119,12 +136,12 @@ def discover(
                             prior_assessed=summary.assessed_count,
                             prior_cache_hits=summary.cache_hits,
                         )
-                        if new_only.results:
+                        if new_only.results or new_only.fallback_results:
                             print_discover(new_only, verbose=verbose, limit=limit)
                         else:
                             _console.print("  [dim]No more repos to assess.[/dim]")
                             break
-                        shown_count = len(new_summary.results)
+                        shown_count = len(new_summary.results) + len(new_summary.fallback_results)
                         remaining = new_summary.total_searched - shown_count
                         summary = new_summary
 

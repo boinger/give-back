@@ -432,6 +432,171 @@ class TestInteractiveLoopFlagPreservation:
         assert sliced.label_gate_active is False, "Interactive loop second batch must preserve label_gate_active=False"
 
 
+class TestAutoFallback:
+    """T1-T8: Auto-fallback pipeline tests."""
+
+    def _make_multi_query_client(
+        self,
+        gated_repos: list[dict],
+        ungated_repos: list[dict],
+        rate_budget: bool = True,
+    ):
+        """Mock client that returns different results based on query content."""
+
+        class MultiQueryClient:
+            authenticated = True
+            _rate_remaining = 5000 if rate_budget else 0
+
+            def search_repos(self, query, per_page=30, sort="stars"):
+                # Ungated queries lack "good-first-issues" and "help-wanted-issues"
+                if "good-first-issues" in query or "help-wanted-issues" in query:
+                    return {"total_count": len(gated_repos), "items": list(gated_repos)}
+                return {"total_count": len(ungated_repos), "items": list(ungated_repos)}
+
+            def has_rate_budget(self, calls):
+                return rate_budget
+
+        return MultiQueryClient()
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_fallback_fires_when_sparse(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T1: Sparse gated + auto_fallback=True → fallback fires."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict("gated/repo1"), _make_repo_dict("gated/repo2")]
+        ungated = [
+            _make_repo_dict("gated/repo1"),  # overlap — should be deduped
+            _make_repo_dict("ungated/repo3", stars=500),
+            _make_repo_dict("ungated/repo4", stars=400),
+        ]
+        client = self._make_multi_query_client(gated, ungated)
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert summary.fallback_triggered is True
+        assert len(summary.fallback_results) > 0
+        # gated/repo1 should NOT appear in fallback (deduped)
+        fb_names = [f"{r.owner}/{r.repo}" for r in summary.fallback_results]
+        assert "gated/repo1" not in fb_names
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_no_fallback_when_not_sparse(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T2: Non-sparse gated → fallback does NOT fire."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict(f"org/repo-{i}") for i in range(10)]
+        client = self._make_multi_query_client(gated, [])
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert summary.fallback_triggered is False
+        assert summary.fallback_results == []
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_no_fallback_when_disabled(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T3: auto_fallback=False → no fallback regardless of sparsity."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict("gated/repo1")]
+        client = self._make_multi_query_client(gated, [_make_repo_dict("ungated/repo2")])
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=False)
+
+        assert summary.fallback_triggered is False
+        assert summary.fallback_results == []
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_no_fallback_with_any_issues(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T4: --any-issues → no fallback (gate already off)."""
+        mock_assess.return_value = _make_assessment()
+        repos = [_make_repo_dict("org/repo")]
+        client = _make_mock_client(repos)
+
+        summary = discover_repos(client, language="python", limit=10, any_issues=True, auto_fallback=True)
+
+        assert summary.fallback_triggered is False
+        assert summary.label_gate_active is False
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_dedup_case_insensitive(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T5: Case-insensitive dedup — repo in both pools stays in primary only."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict("Owner/Repo")]
+        ungated = [_make_repo_dict("owner/repo"), _make_repo_dict("other/new")]
+        client = self._make_multi_query_client(gated, ungated)
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert summary.fallback_triggered is True
+        fb_names = [f"{r.owner}/{r.repo}" for r in summary.fallback_results]
+        # "owner/repo" deduped against "Owner/Repo" in primary
+        assert "owner/repo" not in fb_names
+        assert "other/new" in fb_names
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_fill_to_limit(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T6: Gated=3, limit=10 → up to 7 fallback repos."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict(f"gated/r{i}") for i in range(3)]
+        ungated = [_make_repo_dict(f"ungated/r{i}", stars=100 - i) for i in range(20)]
+        client = self._make_multi_query_client(gated, ungated)
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert len(summary.results) == 3
+        assert len(summary.fallback_results) <= 7
+        assert len(summary.results) + len(summary.fallback_results) <= 10
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_rate_budget_exhausted(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T7: Rate budget exhausted → fallback repos get skip_reason."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict("gated/r0")]
+        ungated = [_make_repo_dict(f"ungated/r{i}") for i in range(5)]
+        client = self._make_multi_query_client(gated, ungated, rate_budget=False)
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert summary.fallback_triggered is True
+        for r in summary.fallback_results:
+            assert r.skip_reason is not None
+
+    @patch("give_back.discover.search.save_discover_cache")
+    @patch("give_back.discover.search.get_discover_cache", return_value=None)
+    @patch("give_back.discover.search.get_cached_assessment", return_value=None)
+    @patch("give_back.discover.search.run_assessment")
+    def test_fallback_triggered_with_zero_results(self, mock_assess, mock_get_cached, mock_get_disc, mock_save_disc):
+        """T8: fallback_triggered=True even when fallback returns 0 repos."""
+        mock_assess.return_value = _make_assessment()
+        gated = [_make_repo_dict("gated/r0")]
+        # Ungated returns only the same repo as gated — all deduped
+        ungated = [_make_repo_dict("gated/r0")]
+        client = self._make_multi_query_client(gated, ungated)
+
+        summary = discover_repos(client, language="python", limit=10, auto_fallback=True)
+
+        assert summary.fallback_triggered is True
+        assert summary.fallback_results == []
+
+
 class TestDiscoverResultDefaults:
     def test_default_fields(self):
         r = DiscoverResult(
@@ -457,6 +622,8 @@ class TestDiscoverSummaryDefaults:
         assert s.assessed_count == 0
         assert s.cache_hits == 0
         assert s.label_gate_active is True
+        assert s.fallback_results == []
+        assert s.fallback_triggered is False
 
 
 class TestBuildQueryNoLabelGate:
@@ -475,20 +642,20 @@ class TestBuildQueryNoLabelGate:
 class TestSliceResults:
     """T9: DiscoverSummary.slice_results carries all fields."""
 
+    def _make_result(self, owner: str) -> DiscoverResult:
+        return DiscoverResult(
+            owner=owner,
+            repo="r",
+            description="d",
+            stars=100,
+            language="Go",
+            topics=[],
+            open_issue_count=10,
+            good_first_issue_count=0,
+        )
+
     def test_slice_basic(self):
-        results = [
-            DiscoverResult(
-                owner=f"o{i}",
-                repo="r",
-                description="d",
-                stars=100 - i,
-                language="Go",
-                topics=[],
-                open_issue_count=10,
-                good_first_issue_count=0,
-            )
-            for i in range(5)
-        ]
+        results = [self._make_result(f"o{i}") for i in range(5)]
         summary = DiscoverSummary(
             query="q",
             total_searched=100,
@@ -508,6 +675,39 @@ class TestSliceResults:
         assert sliced.cache_hits == 2  # 3 - 1
         assert sliced.label_gate_active is False
         assert sliced.query == "q"
+
+    def test_slice_with_fallback(self):
+        """slice_results carries fallback_results with correct two-pool offset."""
+        primary = [self._make_result(f"p{i}") for i in range(3)]
+        fallback = [self._make_result(f"f{i}") for i in range(7)]
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=100,
+            results=primary,
+            fallback_results=fallback,
+            fallback_triggered=True,
+        )
+        # Offset 5 = skip all 3 primary + first 2 fallback
+        sliced = summary.slice_results(5)
+        assert sliced.results == []
+        assert len(sliced.fallback_results) == 5  # fallback[2:]
+        assert sliced.fallback_results[0].owner == "f2"
+        assert sliced.fallback_triggered is True
+
+    def test_slice_offset_within_primary(self):
+        """When offset < len(results), all fallback is preserved."""
+        primary = [self._make_result(f"p{i}") for i in range(5)]
+        fallback = [self._make_result(f"f{i}") for i in range(3)]
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=100,
+            results=primary,
+            fallback_results=fallback,
+            fallback_triggered=True,
+        )
+        sliced = summary.slice_results(2)
+        assert len(sliced.results) == 3  # primary[2:]
+        assert len(sliced.fallback_results) == 3  # all preserved
 
 
 def _make_mock_client(

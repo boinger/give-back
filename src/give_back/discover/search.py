@@ -3,11 +3,14 @@
 Uses the GitHub search API to find repos that:
 1. Match language/topic filters
 2. Have recent activity (pushed within 90 days)
-3. Have issues labeled "good first issue" or "help wanted"
+3. Have issues labeled "good first issue" or "help wanted" (unless ``--any-issues``)
 4. Accept external contributions (not archived, has contributing guide)
 
-Results are then pre-screened with a lightweight viability check
-(license gate + basic activity signals) before ranking.
+Results are pre-screened with a lightweight viability check (license gate +
+basic activity signals) before ranking. When the label-gated search returns
+sparse results and ``auto_fallback`` is enabled, a second ungated search
+fills the gap with repos that lack stock contribution labels but may still
+be contribution-friendly.
 """
 
 from __future__ import annotations
@@ -71,23 +74,30 @@ class DiscoverSummary:
     cache_hits: int = 0
     label_gate_active: bool = True
     """True when the search required good-first-issues / help-wanted labels."""
+    fallback_results: list[DiscoverResult] = field(default_factory=list)
+    """Repos from the ungated fallback search, deduplicated against primary results."""
+    fallback_triggered: bool = False
+    """True when the fallback search was attempted (even if it found nothing)."""
 
     def slice_results(self, offset: int, prior_assessed: int = 0, prior_cache_hits: int = 0) -> "DiscoverSummary":
         """Return a new summary containing only results after *offset*.
 
-        Carries all fields so callers don't silently drop newly added ones.
-        ``prior_assessed`` and ``prior_cache_hits`` are subtracted to yield
-        delta counts for the slice (matching the old manual-reconstruction
-        logic in the interactive loop).
+        Treats ``results + fallback_results`` as a single logical sequence
+        for offset calculation. Carries all fields so callers don't silently
+        drop newly added ones.
         """
+        primary_offset = min(offset, len(self.results))
+        fallback_offset = max(0, offset - len(self.results))
         return DiscoverSummary(
             query=self.query,
             total_searched=self.total_searched,
-            results=self.results[offset:],
+            results=self.results[primary_offset:],
             filtered_count=self.filtered_count,
             assessed_count=self.assessed_count - prior_assessed,
             cache_hits=self.cache_hits - prior_cache_hits,
             label_gate_active=self.label_gate_active,
+            fallback_results=self.fallback_results[fallback_offset:],
+            fallback_triggered=self.fallback_triggered,
         )
 
 
@@ -143,6 +153,69 @@ def _repo_dict_to_result(repo: dict) -> DiscoverResult:
     )
 
 
+def _assess_results(
+    client: GitHubClient,
+    results: list[DiscoverResult],
+    batch_size: int,
+) -> tuple[int, int]:
+    """Check assessment cache and batch-assess unknowns.
+
+    Populates ``tier`` and ``from_cache`` on each result in-place.
+    Results that fail assessment get a ``skip_reason``.
+
+    Returns:
+        ``(assessed_count, cache_hits)`` — counts of freshly assessed
+        and cache-hit repos respectively.
+    """
+    assess_queue: list[DiscoverResult] = []
+    cache_hits = 0
+
+    for result in results:
+        cached_assessment = get_cached_assessment(result.owner, result.repo)
+        if cached_assessment is not None:
+            try:
+                assessment, _ = reconstruct_assessment(cached_assessment, result.owner, result.repo)
+                result.tier = assessment.overall_tier
+                result.from_cache = True
+                cache_hits += 1
+            except ValueError:
+                _log.debug("Failed to reconstruct cached assessment for %s/%s", result.owner, result.repo)
+                assess_queue.append(result)
+        else:
+            assess_queue.append(result)
+
+    assessed_count = 0
+    signal_names = [s.name for s in ALL_SIGNALS]
+
+    for batch_start in range(0, len(assess_queue), batch_size):
+        batch = assess_queue[batch_start : batch_start + batch_size]
+        budget_needed = len(batch) * _WORST_CASE_CALLS_PER_REPO
+
+        if not client.has_rate_budget(budget_needed):
+            _console.print(
+                f"[yellow]Rate limit low — stopping assessment after {assessed_count} repos "
+                f"({len(assess_queue) - batch_start} remaining).[/yellow]"
+            )
+            for remaining in assess_queue[batch_start:]:
+                remaining.skip_reason = "Skipped — rate limit too low for assessment"
+            break
+
+        for result in batch:
+            slug = f"{result.owner}/{result.repo}"
+            _console.print(f"  [dim]Assessing {slug}...[/dim]")
+
+            try:
+                assessment = run_assessment(client, result.owner, result.repo)
+                result.tier = assessment.overall_tier
+                save_assessment(assessment, signal_names)
+                assessed_count += 1
+            except GiveBackError as exc:
+                _log.warning("Assessment failed for %s: %s", slug, exc)
+                result.skip_reason = f"Assessment failed: {exc}"
+
+    return assessed_count, cache_hits
+
+
 def discover_repos(
     client: GitHubClient,
     *,
@@ -155,8 +228,13 @@ def discover_repos(
     exclude_assessed: bool = False,
     any_issues: bool = False,
     verbose: bool = False,
+    auto_fallback: bool = False,
 ) -> DiscoverSummary:
     """Search GitHub for contribution-friendly repos and pre-screen viability.
+
+    When ``auto_fallback`` is True and the label-gated search returns sparse
+    results, automatically runs a second ungated search and populates
+    ``fallback_results`` on the returned summary.
 
     Args:
         client: Authenticated GitHub client.
@@ -169,9 +247,11 @@ def discover_repos(
         exclude_assessed: If True, filter out repos that already have a cached assessment.
         any_issues: If True, skip the good-first-issue / help-wanted label gate.
         verbose: If True, print search query strings and hit counts to stderr.
+        auto_fallback: If True, run an ungated fallback search when gated results
+            are sparse (fewer than ``min(limit, 5)``).
 
     Returns:
-        DiscoverSummary with ranked results.
+        DiscoverSummary with ranked results (and optional fallback_results).
     """
     label_gate_active = not any_issues
 
@@ -263,58 +343,9 @@ def discover_repos(
     # Step 8: Take top `limit`
     repos = repos[:limit]
 
-    # Step 9: Check assessment cache for each, queue unknowns
-    results: list[DiscoverResult] = []
-    assess_queue: list[DiscoverResult] = []
-    cache_hits = 0
-
-    for repo_dict in repos:
-        result = _repo_dict_to_result(repo_dict)
-
-        cached_assessment = get_cached_assessment(result.owner, result.repo)
-        if cached_assessment is not None:
-            try:
-                assessment, _ = reconstruct_assessment(cached_assessment, result.owner, result.repo)
-                result.tier = assessment.overall_tier
-                result.from_cache = True
-                cache_hits += 1
-            except ValueError:
-                _log.debug("Failed to reconstruct cached assessment for %s/%s", result.owner, result.repo)
-                assess_queue.append(result)
-        else:
-            assess_queue.append(result)
-
-        results.append(result)
-
-    # Step 10: Batch-assess unknowns
-    assessed_count = 0
-    signal_names = [s.name for s in ALL_SIGNALS]
-
-    for batch_start in range(0, len(assess_queue), batch_size):
-        batch = assess_queue[batch_start : batch_start + batch_size]
-        budget_needed = len(batch) * _WORST_CASE_CALLS_PER_REPO
-
-        if not client.has_rate_budget(budget_needed):
-            _console.print(
-                f"[yellow]Rate limit low — stopping assessment after {assessed_count} repos "
-                f"({len(assess_queue) - batch_start} remaining).[/yellow]"
-            )
-            for remaining in assess_queue[batch_start:]:
-                remaining.skip_reason = "Skipped — rate limit too low for assessment"
-            break
-
-        for result in batch:
-            slug = f"{result.owner}/{result.repo}"
-            _console.print(f"  [dim]Assessing {slug}...[/dim]")
-
-            try:
-                assessment = run_assessment(client, result.owner, result.repo)
-                result.tier = assessment.overall_tier
-                save_assessment(assessment, signal_names)
-                assessed_count += 1
-            except GiveBackError as exc:
-                _log.warning("Assessment failed for %s: %s", slug, exc)
-                result.skip_reason = f"Assessment failed: {exc}"
+    # Steps 9-10: Check assessment cache + batch-assess unknowns
+    results: list[DiscoverResult] = [_repo_dict_to_result(rd) for rd in repos]
+    assessed_count, cache_hits = _assess_results(client, results, batch_size)
 
     # Step 11: Save discover cache (search metadata, not assessments)
     if not used_cache:
@@ -325,7 +356,61 @@ def discover_repos(
             cache_repos.append(cleaned)
         save_discover_cache(query_hash, q1, cache_repos)
 
-    # Step 12: Build and return summary
+    # Step 13: Auto-fallback (conditional)
+    # When the label gate is active, results are sparse, and auto_fallback is
+    # enabled, run a second ungated search to fill up to `limit` total repos.
+    fallback_results: list[DiscoverResult] = []
+    fallback_triggered = False
+
+    if label_gate_active and auto_fallback and len(results) < min(limit, 5):
+        fallback_triggered = True
+
+        q_fallback = _build_query(language, topic, min_stars, None)
+        fallback_hash = hashlib.sha256(q_fallback.encode()).hexdigest()[:16]
+
+        # 13c-13d: Check fallback cache or search
+        fb_repos: list[dict] = []
+        fb_used_cache = False
+        if not no_cache:
+            fb_cached = get_discover_cache(fallback_hash)
+            if fb_cached is not None:
+                fb_repos = fb_cached.get("repos", [])
+                _log.debug("Fallback cache hit for hash %s (%d repos)", fallback_hash, len(fb_repos))
+                fb_used_cache = True
+
+        if not fb_used_cache:
+            try:
+                fb_response = client.search_repos(q_fallback, per_page=30)
+                fb_repos = fb_response.get("items", [])
+            except GiveBackError as exc:
+                _log.warning("Fallback search failed: %s", exc)
+                fb_repos = []
+
+        if verbose:
+            _console.print(f"  [dim]Fallback: {q_fallback}  (returned {len(fb_repos)})[/dim]")
+
+        # 13e: Deduplicate (case-insensitive) — remove repos already in primary
+        primary_names = {f"{r.owner}/{r.repo}".lower() for r in results}
+        fb_repos = [r for r in fb_repos if r.get("full_name", "").lower() not in primary_names]
+
+        # 13f-13g: Rank and cap to fill up to limit
+        fb_repos = rank_repos(fb_repos)
+        fb_budget = limit - len(results)
+        fb_repos = fb_repos[:fb_budget]
+
+        # 13h-13i: Assess fallback repos
+        fallback_results = [_repo_dict_to_result(rd) for rd in fb_repos]
+        if fallback_results:
+            fb_assessed, fb_cache_hits = _assess_results(client, fallback_results, batch_size)
+            assessed_count += fb_assessed
+            cache_hits += fb_cache_hits
+
+        # 13j: Save fallback discover cache
+        if not fb_used_cache and fb_repos:
+            fb_cache_repos = [{k: v for k, v in r.items() if not k.startswith("_")} for r in fb_repos]
+            save_discover_cache(fallback_hash, q_fallback, fb_cache_repos)
+
+    # Step 14: Build and return summary
     return DiscoverSummary(
         query=q1,
         total_searched=total_searched,
@@ -334,4 +419,6 @@ def discover_repos(
         assessed_count=assessed_count,
         cache_hits=cache_hits,
         label_gate_active=label_gate_active,
+        fallback_results=fallback_results,
+        fallback_triggered=fallback_triggered,
     )

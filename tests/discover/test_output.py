@@ -217,3 +217,121 @@ class TestDiscoverJsonOutput:
 
         data = json.loads(mock_print.call_args[0][0])
         assert data["label_gate_active"] is False
+
+
+def _make_result(owner: str, repo: str = "r", tier: Tier = Tier.GREEN) -> DiscoverResult:
+    return DiscoverResult(
+        owner=owner,
+        repo=repo,
+        description="desc",
+        stars=100,
+        language="Go",
+        topics=[],
+        open_issue_count=10,
+        good_first_issue_count=0,
+        tier=tier,
+    )
+
+
+class TestFallbackTable:
+    """T10-T12 (fallback): fallback table rendering and hint suppression."""
+
+    def test_fallback_table_rendered_with_continuous_numbering(self):
+        """T10: fallback_results non-empty → second table with numbering from primary."""
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=10,
+            assessed_count=5,
+            results=[_make_result("primary", "r1"), _make_result("primary", "r2")],
+            fallback_results=[_make_result("fallback", "r3"), _make_result("fallback", "r4")],
+            fallback_triggered=True,
+            label_gate_active=True,
+        )
+        output = _capture(summary, limit=10)
+        assert "Also found" in output
+        # Continuous numbering: primary has 1,2 — fallback should have 3,4
+        # Check that repo names appear in the output
+        assert "fallback/r3" in output
+        assert "fallback/r4" in output
+
+    def test_no_fallback_table_when_empty(self):
+        """T11: fallback_results empty → no second table."""
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=2,
+            assessed_count=2,
+            results=[_make_result("primary", "r1")],
+            fallback_results=[],
+            fallback_triggered=False,
+            label_gate_active=True,
+        )
+        output = _capture(summary, limit=10)
+        assert "Also found" not in output
+
+    def test_hint_suppressed_when_fallback_has_results(self):
+        """T12: Sparse hint suppressed when fallback_results is non-empty."""
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=2,
+            assessed_count=2,
+            results=[_make_result("primary", "r1")],
+            fallback_results=[_make_result("fallback", "r2")],
+            fallback_triggered=True,
+            label_gate_active=True,
+        )
+        from unittest.mock import patch
+
+        with patch("give_back.output.discover.emit_advisory") as mock_hint:
+            _capture(summary, limit=10)
+
+        mock_hint.assert_not_called()
+
+
+class TestFallbackJsonOutput:
+    """T13-T14: JSON fallback fields."""
+
+    def test_json_includes_fallback_when_triggered(self):
+        """T13: JSON includes fallback fields when fallback_triggered=True."""
+        import json
+
+        from give_back.output.discover import print_discover_json
+
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=5,
+            assessed_count=3,
+            results=[_make_result("primary")],
+            fallback_results=[_make_result("fallback")],
+            fallback_triggered=True,
+        )
+        from unittest.mock import patch
+
+        with patch("builtins.print") as mock_print:
+            print_discover_json(summary)
+
+        data = json.loads(mock_print.call_args[0][0])
+        assert data["fallback_triggered"] is True
+        assert len(data["fallback_results"]) == 1
+        assert data["fallback_results"][0]["owner"] == "fallback"
+
+    def test_json_omits_fallback_when_not_triggered(self):
+        """T14: JSON omits fallback fields when fallback_triggered=False."""
+        import json
+
+        from give_back.output.discover import print_discover_json
+
+        summary = DiscoverSummary(
+            query="q",
+            total_searched=5,
+            assessed_count=3,
+            results=[_make_result("primary")],
+            fallback_triggered=False,
+        )
+        from unittest.mock import patch
+
+        with patch("builtins.print") as mock_print:
+            print_discover_json(summary)
+
+        data = json.loads(mock_print.call_args[0][0])
+        assert "fallback_triggered" not in data
+        assert "fallback_results" not in data
