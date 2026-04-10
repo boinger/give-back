@@ -33,7 +33,10 @@ fallback_results: list[DiscoverResult] = field(default_factory=list)
 ```
 
 - Empty by default (no fallback ran).
-- Repos are guaranteed not to overlap with `results` (deduplicated by full_name).
+- Deduplicated **against the primary pool**: if a repo appears in both the
+  gated and ungated searches, it stays in the primary `results` table and is
+  removed from `fallback_results`. The primary table is never modified by the
+  fallback — deduplication only removes from the fallback side.
 - Same `DiscoverResult` type as the primary pool.
 - `slice_results()` carries `fallback_results` forward.
 
@@ -51,7 +54,9 @@ a new **Step 13: Auto-fallback** fires when ALL conditions hold:
 ```
 Step 13a: Build ungated query (_build_query with label_filter=None)
 Step 13b: Run search (search_repos — separate cache key via query hash)
-Step 13c: Deduplicate — remove repos already in `results` by full_name
+Step 13c: Deduplicate — remove from the fallback pool any repo whose
+          full_name already appears in the primary `results` list.
+          Primary results are never modified.
 Step 13d: Rank the fallback pool (rank_repos — no GFI/HW bonuses apply)
 Step 13e: Take up to (limit - len(results)) repos
 Step 13f: Assess each (same batch loop, same rate budget check)
@@ -124,16 +129,25 @@ the "Use give-back triage" line, render:
 
 ### JSON (`print_discover_json`)
 
-When `summary.fallback_results` is non-empty:
+Three states, distinguishable by JSON consumers:
+
+| State | `fallback_triggered` | `fallback_results` |
+|-------|---------------------|--------------------|
+| Fallback didn't run (not sparse, or opt-out) | field absent | field absent |
+| Fallback ran, found repos | `true` | `[...items...]` |
+| Fallback ran, found nothing | `true` | `[]` |
+
+Example (fallback ran and found repos):
 ```json
 {
-  "fallback_results": [ ... same schema as results ... ],
-  "fallback_triggered": true
+  "fallback_triggered": true,
+  "fallback_results": [ ... same schema as results ... ]
 }
 ```
 
-When empty: both fields omitted entirely. Existing JSON shape unchanged
-for the common (non-sparse) case.
+This lets JSON consumers distinguish "fallback didn't run" (fields absent)
+from "fallback ran but found nothing" (`fallback_triggered: true` with an
+empty array). Existing JSON shape is unchanged when fallback doesn't fire.
 
 ## Edge Cases
 
@@ -144,7 +158,33 @@ for the common (non-sparse) case.
 | Gated returns 8, limit is 10 | 8 >= min(10, 5), fallback does NOT fire. |
 | Gated returns 3, limit is 10 | 3 < 5, fallback fires. Up to 7 fallback repos. |
 | Rate limit exhausted during gated | Fallback still fires (sparse check uses result count). Fallback repos may also get `skip_reason`. |
-| `--interactive` with fallback | Fallback fires on first batch. Subsequent "show more" batches re-evaluate sparsity at the new limit. |
+| `--interactive` with fallback | See "Interactive loop with fallback" below. |
+
+### Interactive loop with fallback
+
+The interactive loop calls `discover_repos` repeatedly with increasing limits.
+Each call is a fresh pipeline execution (gated search → assessment → optional
+fallback). Concretely:
+
+1. **First batch** (limit=10): Gated returns 3 repos. 3 < min(10, 5), so
+   fallback fires and fills up to 7 more. User sees two tables (3 + 7).
+
+2. **"Show more"** (limit=20): `discover_repos` runs again with limit=20.
+   The gated search re-runs (may return the same 3, or the GitHub API may
+   paginate differently). The pipeline re-evaluates sparsity at the new limit:
+   if gated still returns < min(20, 5) = 5, fallback fires again with a
+   budget of 20 - len(gated). The `slice_results` method then extracts only
+   the new repos (offset past what was already shown).
+
+3. **Key behavior:** The gated query is always re-run first. The fallback
+   query is only re-run if the gated result count is still sparse at the new
+   limit. If the gated search returns enough results at the higher limit
+   (unlikely but possible if GitHub's ranking shifted), no fallback occurs
+   on the subsequent batch.
+
+4. **Both pools paginate through the same `slice_results` mechanism.** The
+   interactive loop tracks `shown_count` as `len(results) + len(fallback_results)`
+   and slices both lists. `slice_results` already carries `fallback_results`.
 
 ## Files Changed
 
