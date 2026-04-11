@@ -20,22 +20,25 @@ _CANDIDATES = (
 
 
 def iter_contributing_md(clone_dir: Path) -> Iterator[str]:
-    """Yield lowercased content of each CONTRIBUTING.md variant found.
+    """Yield original (unmodified) content of each CONTRIBUTING.md variant found.
 
     Skips candidates that raise OSError on read and continues to the next.
     Yields nothing if no candidate file exists or all reads fail.
 
-    Callers typically iterate until their pattern matches, then break:
+    Callers that need case-insensitive matching should lowercase locally.
+    Callers that need to preserve case (e.g., URL path extraction, where
+    paths are case-sensitive per RFC 3986) can use the content as-is:
 
-        for content in iter_contributing_md(clone_dir):
+        for original in iter_contributing_md(clone_dir):
+            content = original.lower()  # for case-insensitive match
             if "developer certificate of origin" in content:
                 return True
-        return False
+            # `original` still available for case-sensitive extraction
     """
     for name in _CANDIDATES:
         path = clone_dir / name
         if path.is_file():
             try:
-                yield path.read_text(encoding="utf-8", errors="replace").lower()
+                yield path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue

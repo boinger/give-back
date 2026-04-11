@@ -78,9 +78,12 @@ def _check_contributing_for_dco(clone_dir: Path) -> bool:
        rejecting example-only mentions like "your commits should look like:
        Signed-off-by: ...".
     """
-    for content in iter_contributing_md(clone_dir):
+    for original in iter_contributing_md(clone_dir):
+        content = original.lower()
         if "developer certificate of origin" in content:
             return True
+        # Requirement regex already uses re.IGNORECASE, but run it on
+        # lowercased content for consistency with the phrase check.
         if _REQUIRED_SIGNOFF_RE.search(content):
             return True
     return False

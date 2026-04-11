@@ -57,6 +57,27 @@ _SIGNING_URLS: dict[str, str] = {
 # EasyCLA bots embed signing URLs in their comments
 _EASYCLA_URL_RE = re.compile(r"https://\S*easycla\S*")
 
+# Generic CLA signing URLs in CONTRIBUTING.md. "cla" must be the leading
+# subdomain component — the common pattern (cla.strapi.io,
+# cla.developers.google.com, cla.openjsf.org). The terminator char class
+# includes whitespace, closing markdown delimiters, and backtick so inline
+# code `https://cla.example.io/sign` doesn't capture the trailing backtick.
+# re.IGNORECASE lets the "cla." prefix match `HTTPS://CLA.EXAMPLE.IO` too
+# (host is case-insensitive per RFC 3986) while the original-case path is
+# preserved via the match's captured text.
+_CLA_URL_RE = re.compile(r"https://cla\.[^\s)\]\"'`>]+", re.IGNORECASE)
+
+
+def _extract_cla_url(original_content: str) -> str | None:
+    """Scan CONTRIBUTING.md content for a generic CLA signing URL.
+
+    Takes ORIGINAL (non-lowercased) content because URL paths are
+    case-sensitive per RFC 3986 — lowercasing would mangle mixed-case
+    path segments. Returns the first match or None.
+    """
+    match = _CLA_URL_RE.search(original_content)
+    return match.group(0) if match else None
+
 
 def _derive_signing_url(system: str, owner: str | None = None, repo: str | None = None) -> str | None:
     """Derive the signing URL for a given CLA system."""
@@ -145,20 +166,34 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> t
     return None
 
 
-def _check_contributing_for_cla(clone_dir: Path) -> tuple[str, str] | None:
-    """Search CONTRIBUTING.md variants for known CLA system mentions.
+def _check_contributing_for_cla(clone_dir: Path) -> tuple[str, str, str | None] | None:
+    """Search CONTRIBUTING.md variants for CLA requirements.
 
-    Returns (system, detection_source) or None.
+    Returns (system, detection_source, extracted_url) or None.
+
+    extracted_url is always None for system-specific matches (apache,
+    google, easycla, cla-assistant) — callers use _derive_signing_url
+    for those. extracted_url may be populated for the generic fallback
+    when a CLA signing URL appears directly in the CONTRIBUTING.md body.
     """
-    for content in iter_contributing_md(clone_dir):
+    for original in iter_contributing_md(clone_dir):
+        content = original.lower()
+
+        # System-specific matches take priority over the generic fallback.
         if "apache" in content and ("icla" in content or "apache.org/licenses" in content):
-            return ("apache", "contributing-md")
+            return ("apache", "contributing-md", None)
         if "google" in content and ("cla.developers.google.com" in content or "google cla" in content):
-            return ("google", "contributing-md")
+            return ("google", "contributing-md", None)
         if "easycla" in content or "lfx.linuxfoundation" in content:
-            return ("easycla", "contributing-md")
+            return ("easycla", "contributing-md", None)
         if "cla-assistant" in content:
-            return ("cla-assistant", "contributing-md")
+            return ("cla-assistant", "contributing-md", None)
+
+        # Generic fallback: canonical phrase match + optional URL extraction.
+        # URL extraction runs against ORIGINAL content to preserve path case.
+        if "contributor license agreement" in content:
+            extracted_url = _extract_cla_url(original)
+            return ("unknown", "contributing-md", extracted_url)
 
     return None
 
@@ -206,11 +241,12 @@ def detect_cla(
     # Signal 3: CONTRIBUTING.md
     contrib_result = _check_contributing_for_cla(clone_dir)
     if contrib_result is not None:
-        system, source = contrib_result
+        system, source, extracted_url = contrib_result
+        signing_url = extracted_url or _derive_signing_url(system, owner, repo)
         return CLAInfo(
             required=True,
             system=system,
-            signing_url=_derive_signing_url(system, owner, repo),
+            signing_url=signing_url,
             detection_source=source,
         )
 

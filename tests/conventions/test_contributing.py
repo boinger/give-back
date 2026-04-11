@@ -40,5 +40,35 @@ def test_iter_contributing_md_skips_unreadable(tmp_path: Path) -> None:
         contents = list(iter_contributing_md(tmp_path))
 
     # The .rst file raised OSError → skipped. Only .github/CONTRIBUTING.md yielded.
+    # Content is yielded in ORIGINAL case (not lowercased) per the contract
+    # update in 2026-04-11.
     assert len(contents) == 1
-    assert "github file" in contents[0]
+    assert "GITHUB FILE" in contents[0]
+
+
+def test_iter_contributing_md_yields_original_content(tmp_path: Path) -> None:
+    """Helper yields RAW content, not lowercased.
+
+    Callers that need case-insensitive matching lowercase locally. Callers
+    that need to preserve case (URL extraction, RFC 3986 path preservation)
+    use the raw content directly. This test pins the contract after the
+    2026-04-11 change that moved .lower() out of the helper.
+    """
+    mixed_case_content = (
+        "# Contributing\n\n"
+        "You must sign the Contributor License Agreement at "
+        "https://cla.Example.io/SomeMixedCase/Path before submitting."
+    )
+    (tmp_path / "CONTRIBUTING.md").write_text(mixed_case_content)
+
+    contents = list(iter_contributing_md(tmp_path))
+
+    # On case-insensitive filesystems (macOS HFS+/APFS), CONTRIBUTING.md and
+    # contributing.md alias to the same inode, so the iterator may yield the
+    # same file content twice. Assert at least one yield and that every
+    # yielded copy preserves case.
+    assert len(contents) >= 1
+    for content in contents:
+        assert "Contributor License Agreement" in content
+        assert "Example.io" in content
+        assert "SomeMixedCase/Path" in content
