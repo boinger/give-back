@@ -58,6 +58,30 @@ def _detect_linter(clone_dir: Path) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _ruff_format_enabled(data: dict, is_pyproject: bool) -> bool:
+    """Return True if the TOML config enables `ruff format`."""
+    ruff_section = data.get("tool", {}).get("ruff", {}) if is_pyproject else data
+    return "format" in ruff_section
+
+
+def _line_length_from_section(section: dict) -> int | None:
+    """Read line-length from a TOML section, accepting either hyphen or underscore."""
+    for key in ("line-length", "line_length"):
+        if key in section:
+            return int(section[key])
+    return None
+
+
+def _line_length_from_pyproject(data: dict) -> int | None:
+    """Read line-length from `[tool.ruff]` or `[tool.black]` in pyproject.toml."""
+    tool = data.get("tool", {})
+    for section_name in ("ruff", "black"):
+        length = _line_length_from_section(tool.get(section_name, {}))
+        if length is not None:
+            return length
+    return None
+
+
 def _detect_formatter(clone_dir: Path, linter: str | None) -> str | None:
     """Detect code formatter."""
     # Python: ruff format
@@ -66,19 +90,14 @@ def _detect_formatter(clone_dir: Path, linter: str | None) -> str | None:
         ruff_toml = clone_dir / "ruff.toml"
 
         for cfg_path in (ruff_toml, pyproject):
-            if cfg_path.exists():
-                try:
-                    data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
-                    # ruff.toml: [format] section at top level
-                    # pyproject.toml: [tool.ruff.format]
-                    if cfg_path.name == "pyproject.toml":
-                        ruff_section = data.get("tool", {}).get("ruff", {})
-                    else:
-                        ruff_section = data
-                    if "format" in ruff_section:
-                        return "ruff format"
-                except (tomllib.TOMLDecodeError, OSError):
-                    pass
+            if not cfg_path.exists():
+                continue
+            try:
+                data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+            except (tomllib.TOMLDecodeError, OSError):
+                continue
+            if _ruff_format_enabled(data, cfg_path.name == "pyproject.toml"):
+                return "ruff format"
 
     # Python: black
     pyproject = clone_dir / "pyproject.toml"
@@ -121,21 +140,13 @@ def _extract_line_length(clone_dir: Path, linter: str | None, config_file: str |
     if config_file in ("ruff.toml", "pyproject.toml"):
         try:
             data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
-            if config_file == "pyproject.toml":
-                # Check [tool.ruff] or [tool.black]
-                tool = data.get("tool", {})
-                for section_name in ("ruff", "black"):
-                    section = tool.get(section_name, {})
-                    if "line-length" in section:
-                        return int(section["line-length"])
-                    if "line_length" in section:
-                        return int(section["line_length"])
-            else:
-                # ruff.toml: top-level line-length
-                if "line-length" in data:
-                    return int(data["line-length"])
-                if "line_length" in data:
-                    return int(data["line_length"])
+            length = (
+                _line_length_from_pyproject(data)
+                if config_file == "pyproject.toml"
+                else _line_length_from_section(data)
+            )
+            if length is not None:
+                return length
         except (tomllib.TOMLDecodeError, OSError, ValueError, TypeError):
             pass
 

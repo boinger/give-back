@@ -46,19 +46,24 @@ def _check_commits_for_signoff(clone_dir: Path) -> bool:
 
 def _check_ci_for_dco(clone_dir: Path) -> bool:
     """Check CI configuration for DCO bot or enforcement."""
-    # Check GitHub Actions workflows for DCO references.
     workflows_dir = clone_dir / ".github" / "workflows"
-    if workflows_dir.is_dir():
-        for workflow_file in workflows_dir.iterdir():
-            if workflow_file.suffix in (".yml", ".yaml") and workflow_file.is_file():
-                try:
-                    content = workflow_file.read_text(encoding="utf-8", errors="replace").lower()
-                    if "probot/dco" in content or "dco-check" in content or "dco_check" in content:
-                        return True
-                except OSError:
-                    continue
-
+    if not workflows_dir.is_dir():
+        return False
+    for workflow_file in workflows_dir.iterdir():
+        if workflow_file.suffix not in (".yml", ".yaml") or not workflow_file.is_file():
+            continue
+        if _workflow_mentions_dco(workflow_file):
+            return True
     return False
+
+
+def _workflow_mentions_dco(workflow_file: Path) -> bool:
+    """Return True if the workflow file references a known DCO bot or check."""
+    try:
+        content = workflow_file.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+    return "probot/dco" in content or "dco-check" in content or "dco_check" in content
 
 
 def _check_dco_file(clone_dir: Path) -> bool:

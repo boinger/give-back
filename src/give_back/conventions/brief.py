@@ -30,6 +30,19 @@ _log = logging.getLogger(__name__)
 _EXPECTED_ERRORS = (GiveBackError, httpx.HTTPError, OSError, subprocess.SubprocessError)
 
 
+def _extract_reviewer_logins(reviews: object) -> set[str]:
+    """Collect non-empty reviewer logins from a reviews API response."""
+    if not isinstance(reviews, list):
+        return set()
+    logins: set[str] = set()
+    for review in reviews:
+        user = review.get("user") or {}
+        login = user.get("login")
+        if login:
+            logins.add(login)
+    return logins
+
+
 def _fetch_review_info(client: GitHubClient, owner: str, repo: str) -> ReviewInfo:
     """Fetch typical reviewers from recent merged PRs.
 
@@ -60,15 +73,10 @@ def _fetch_review_info(client: GitHubClient, owner: str, repo: str) -> ReviewInf
                 continue
             try:
                 reviews = client.rest_get(f"/repos/{owner}/{repo}/pulls/{pr_number}/reviews")
-                if isinstance(reviews, list):
-                    for review in reviews:
-                        user = review.get("user", {})
-                        login = user.get("login")
-                        if login:
-                            reviewers.add(login)
             except _EXPECTED_ERRORS:
                 _log.debug("Failed to fetch reviews for PR #%s", pr_number)
                 continue
+            reviewers.update(_extract_reviewer_logins(reviews))
 
     except _EXPECTED_ERRORS:
         _log.debug("Failed to fetch PRs for review info")

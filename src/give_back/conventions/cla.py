@@ -146,24 +146,35 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> t
             continue
         try:
             comments = client.rest_get(f"/repos/{owner}/{repo}/issues/{pr_number}/comments")
-            if not isinstance(comments, list):
-                continue
-            for comment in comments:
-                login = (comment.get("user") or {}).get("login", "")
-                if login.lower() in _BOT_TO_SYSTEM:
-                    # Try to extract signing URL from EasyCLA bot comments
-                    extracted_url = None
-                    if "easycla" in login.lower():
-                        body = comment.get("body", "")
-                        match = _EASYCLA_URL_RE.search(body)
-                        if match:
-                            extracted_url = match.group(0)
-                    return (login, extracted_url)
         except (GiveBackError, httpx.HTTPError, OSError):
             _log.debug("Failed to fetch comments for PR #%s", pr_number)
             continue
+        if not isinstance(comments, list):
+            continue
+        for comment in comments:
+            match = _match_cla_bot_comment(comment)
+            if match is not None:
+                return match
 
     return None
+
+
+def _match_cla_bot_comment(comment: dict) -> tuple[str, str | None] | None:
+    """Return (login, signing_url) if a comment is from a known CLA bot, else None.
+
+    EasyCLA comments embed a signing URL in the body; other bots don't, so the
+    returned URL is None for them.
+    """
+    login = (comment.get("user") or {}).get("login", "")
+    if login.lower() not in _BOT_TO_SYSTEM:
+        return None
+    extracted_url: str | None = None
+    if "easycla" in login.lower():
+        body = comment.get("body", "")
+        url_match = _EASYCLA_URL_RE.search(body)
+        if url_match:
+            extracted_url = url_match.group(0)
+    return (login, extracted_url)
 
 
 def _check_contributing_for_cla(clone_dir: Path) -> tuple[str, str, str | None] | None:

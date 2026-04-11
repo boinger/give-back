@@ -9,6 +9,18 @@ from pathlib import Path
 from give_back.conventions.models import CITestInfo
 
 
+def _has_unittest_imports(test_files: list[Path]) -> bool:
+    """Return True if any of the given test files import the unittest module."""
+    for tf in test_files:
+        try:
+            content = tf.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "import unittest" in content:
+            return True
+    return False
+
+
 def _detect_framework(clone_dir: Path) -> str | None:
     """Detect the test framework from config files and directory structure."""
     # Python: pytest
@@ -34,21 +46,16 @@ def _detect_framework(clone_dir: Path) -> str | None:
             pass
 
     # Python: check tests/ dir for test files (default pytest), then unittest imports
-    test_dirs = ["tests", "test"]
-    for td in test_dirs:
+    for td in ("tests", "test"):
         td_path = clone_dir / td
-        if td_path.is_dir():
-            test_files = list(td_path.glob("test_*.py"))
-            if test_files:
-                # Check if any import unittest
-                for tf in test_files[:5]:
-                    try:
-                        content = tf.read_text(encoding="utf-8")
-                        if "import unittest" in content:
-                            return "unittest"
-                    except OSError:
-                        continue
-                return "pytest"
+        if not td_path.is_dir():
+            continue
+        test_files = list(td_path.glob("test_*.py"))
+        if not test_files:
+            continue
+        if _has_unittest_imports(test_files[:5]):
+            return "unittest"
+        return "pytest"
 
     # Go: *_test.go files
     if list(clone_dir.rglob("*_test.go")):
