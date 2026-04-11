@@ -16,6 +16,64 @@ from give_back.exceptions import (
 from give_back.github_client import GitHubClient
 
 
+def _run_interactive_discover_loop(
+    client: GitHubClient,
+    summary,
+    *,
+    language: str | None,
+    topic: str | None,
+    min_stars: int,
+    limit: int,
+    batch_size: int,
+    exclude_assessed: bool,
+    any_issues: bool,
+    auto_fallback: bool,
+    verbose: bool,
+) -> None:
+    """Prompt the user to assess additional batches after the initial discover run."""
+    from give_back.discover.search import discover_repos
+    from give_back.output import print_discover
+
+    shown_count = len(summary.results) + len(summary.fallback_results)
+    remaining = summary.total_searched - shown_count
+
+    while remaining > 0:
+        try:
+            if not click.confirm("  Assess next batch?", default=True):
+                return
+        except (EOFError, KeyboardInterrupt):
+            _console.print()
+            return
+
+        new_limit = shown_count + batch_size
+        new_summary = discover_repos(
+            client,
+            language=language,
+            topic=topic,
+            min_stars=min_stars,
+            limit=new_limit,
+            batch_size=batch_size,
+            no_cache=False,
+            exclude_assessed=exclude_assessed,
+            any_issues=any_issues,
+            verbose=verbose,
+            auto_fallback=auto_fallback,
+        )
+        new_only = new_summary.slice_results(
+            shown_count,
+            prior_assessed=summary.assessed_count,
+            prior_cache_hits=summary.cache_hits,
+        )
+        if not (new_only.results or new_only.fallback_results):
+            _console.print("  [dim]No more repos to assess.[/dim]")
+            return
+
+        print_discover(new_only, verbose=verbose, limit=limit)
+        shown_count = len(new_summary.results) + len(new_summary.fallback_results)
+        remaining = new_summary.total_searched - shown_count
+        summary = new_summary
+
+
 @click.command()
 @click.option("--language", "-l", default=None, help="Filter by primary language (e.g., 'python', 'rust').")
 @click.option("--topic", "-t", default=None, help="Filter by topic (e.g., 'kubernetes', 'cli').")
@@ -104,46 +162,20 @@ def discover(
             else:
                 print_discover(summary, verbose=verbose, limit=limit)
 
-                # Interactive loop — assess additional batches
-                if interactive and not json_output and sys.stdin.isatty():
-                    shown_count = len(summary.results) + len(summary.fallback_results)
-                    remaining = summary.total_searched - shown_count
-                    while remaining > 0:
-                        try:
-                            if not click.confirm("  Assess next batch?", default=True):
-                                break
-                        except (EOFError, KeyboardInterrupt):
-                            _console.print()
-                            break
-
-                        new_limit = shown_count + batch_size
-                        new_summary = discover_repos(
-                            client,
-                            language=language,
-                            topic=topic,
-                            min_stars=min_stars,
-                            limit=new_limit,
-                            batch_size=batch_size,
-                            no_cache=False,
-                            exclude_assessed=exclude_assessed,
-                            any_issues=any_issues,
-                            verbose=verbose,
-                            auto_fallback=auto_fallback,
-                        )
-                        # Only display the new repos (skip already-shown ones)
-                        new_only = new_summary.slice_results(
-                            shown_count,
-                            prior_assessed=summary.assessed_count,
-                            prior_cache_hits=summary.cache_hits,
-                        )
-                        if new_only.results or new_only.fallback_results:
-                            print_discover(new_only, verbose=verbose, limit=limit)
-                        else:
-                            _console.print("  [dim]No more repos to assess.[/dim]")
-                            break
-                        shown_count = len(new_summary.results) + len(new_summary.fallback_results)
-                        remaining = new_summary.total_searched - shown_count
-                        summary = new_summary
+                if interactive and sys.stdin.isatty():
+                    _run_interactive_discover_loop(
+                        client,
+                        summary,
+                        language=language,
+                        topic=topic,
+                        min_stars=min_stars,
+                        limit=limit,
+                        batch_size=batch_size,
+                        exclude_assessed=exclude_assessed,
+                        any_issues=any_issues,
+                        auto_fallback=auto_fallback,
+                        verbose=verbose,
+                    )
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

@@ -155,6 +155,91 @@ _STATUS_MAP = {
 }
 
 
+@dataclass
+class _RefreshResult:
+    """Intermediate result from refreshing one workspace's PR state."""
+
+    pr_state: str | None = None
+    review_state: str | None = None
+    pr_url: str | None = None
+    pr_number: int | None = None
+    stale: bool = False
+    local: bool = False
+    skip_reason: str | None = None
+
+
+def _refresh_workspace_pr_state(
+    client: GitHubClient | None,
+    path: Path,
+    *,
+    owner: str,
+    repo: str,
+    branch_name: str,
+    local_status: str,
+    pr_url: str | None,
+    pr_number: int | None,
+    fork_owner_hint: str | None,
+) -> _RefreshResult:
+    """Determine current PR state for one workspace.
+
+    May update context.json as a side effect when the PR state changes
+    or a new PR is discovered for the branch.
+    """
+    result = _RefreshResult(pr_url=pr_url, pr_number=pr_number)
+
+    if client is None:
+        result.local = True
+        result.pr_state = _STATUS_MAP.get(local_status)
+        return result
+
+    if not client.has_rate_budget(2):
+        result.stale = True
+        result.pr_state = _STATUS_MAP.get(local_status)
+        return result
+
+    if pr_number:
+        try:
+            pr_state, review_state = _refresh_pr_state(client, owner, repo, pr_number)
+        except RepoNotFoundError:
+            result.skip_reason = "PR or repo deleted"
+            result.pr_state = _STATUS_MAP.get(local_status)
+            return result
+        except (GiveBackError, httpx.HTTPError):
+            result.stale = True
+            result.pr_state = _STATUS_MAP.get(local_status)
+            return result
+        result.pr_state = pr_state
+        result.review_state = review_state
+        new_ctx_status = _pr_state_to_context_status(pr_state)
+        if new_ctx_status != local_status:
+            update_context_status(path, new_ctx_status, pr_url=pr_url, pr_number=pr_number)
+        return result
+
+    if branch_name:
+        fork_owner = fork_owner_hint or parse_fork_owner_from_remote(path)
+        if not (fork_owner and owner and repo):
+            result.pr_state = _STATUS_MAP.get(local_status)
+            return result
+        try:
+            pr_info = find_pr_for_branch(client, owner, repo, fork_owner, branch_name)
+        except (GiveBackError, httpx.HTTPError):
+            result.stale = True
+            result.pr_state = _STATUS_MAP.get(local_status)
+            return result
+        if pr_info is None:
+            result.pr_state = _STATUS_MAP.get(local_status)
+            return result
+        result.pr_number = pr_info.pr_number
+        result.pr_url = pr_info.pr_url
+        result.pr_state = pr_info.state
+        new_ctx_status = _pr_state_to_context_status(pr_info.state)
+        update_context_status(path, new_ctx_status, pr_url=pr_info.pr_url, pr_number=pr_info.pr_number)
+        return result
+
+    result.pr_state = _STATUS_MAP.get(local_status)
+    return result
+
+
 def check_contributions(
     client: GitHubClient | None,
     workspace_dir: Path | None = None,
@@ -187,55 +272,17 @@ def check_contributions(
             pr_url = ctx.get("pr_url")
             pr_number = ctx.get("pr_number") or _extract_pr_number(pr_url or "")
 
-            pr_state: str | None = None
-            review_state: str | None = None
-            stale = False
-            local = False
-            skip_reason: str | None = None
-
-            if client is None:
-                local = True
-                # Map local status to display values
-                pr_state = _STATUS_MAP.get(local_status)
-            elif client.has_rate_budget(2):
-                if pr_number:
-                    try:
-                        pr_state, review_state = _refresh_pr_state(client, owner, repo, pr_number)
-                        # Update context.json if state changed
-                        new_ctx_status = _pr_state_to_context_status(pr_state)
-                        if new_ctx_status != local_status:
-                            update_context_status(path, new_ctx_status, pr_url=pr_url, pr_number=pr_number)
-                    except RepoNotFoundError:
-                        skip_reason = "PR or repo deleted"
-                        pr_state = _STATUS_MAP.get(local_status)
-                    except (GiveBackError, httpx.HTTPError):
-                        stale = True
-                        pr_state = _STATUS_MAP.get(local_status)
-                elif branch_name:
-                    # Try to find a PR for this branch
-                    fork_owner = ctx.get("fork_owner") or parse_fork_owner_from_remote(path)
-                    if fork_owner and owner and repo:
-                        try:
-                            pr_info = find_pr_for_branch(client, owner, repo, fork_owner, branch_name)
-                            if pr_info:
-                                pr_number = pr_info.pr_number
-                                pr_url = pr_info.pr_url
-                                pr_state = pr_info.state
-                                new_ctx_status = _pr_state_to_context_status(pr_info.state)
-                                update_context_status(path, new_ctx_status, pr_url=pr_url, pr_number=pr_number)
-                            else:
-                                pr_state = _STATUS_MAP.get(local_status)
-                        except (GiveBackError, httpx.HTTPError):
-                            stale = True
-                            pr_state = _STATUS_MAP.get(local_status)
-                    else:
-                        pr_state = _STATUS_MAP.get(local_status)
-                else:
-                    pr_state = _STATUS_MAP.get(local_status)
-            else:
-                # Not enough rate budget
-                stale = True
-                pr_state = _STATUS_MAP.get(local_status)
+            refresh = _refresh_workspace_pr_state(
+                client,
+                path,
+                owner=owner,
+                repo=repo,
+                branch_name=branch_name,
+                local_status=local_status,
+                pr_url=pr_url,
+                pr_number=pr_number,
+                fork_owner_hint=ctx.get("fork_owner"),
+            )
 
             contributions.append(
                 ContributionStatus(
@@ -243,18 +290,17 @@ def check_contributions(
                     repo=repo,
                     issue_number=issue_number,
                     branch_name=branch_name,
-                    pr_url=pr_url,
-                    pr_number=pr_number,
-                    pr_state=pr_state,
-                    review_state=review_state,
+                    pr_url=refresh.pr_url,
+                    pr_number=refresh.pr_number,
+                    pr_state=refresh.pr_state,
+                    review_state=refresh.review_state,
                     workspace_path=str(path),
-                    stale=stale,
-                    local=local,
-                    skip_reason=skip_reason,
+                    stale=refresh.stale,
+                    local=refresh.local,
+                    skip_reason=refresh.skip_reason,
                 )
             )
 
-            # Collect archived contributions from previous_issues
             for prev in ctx.get("previous_issues", []):
                 archived.append(
                     ArchivedContribution(
