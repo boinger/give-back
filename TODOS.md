@@ -93,26 +93,6 @@ drift without forcing a cleanup campaign.
 **Depends on / blocked by:** Nothing. Passive — revisit when touching any of
 the flagged functions.
 
-## Add coverage reporting to CI
-
-**What:** `pytest-cov>=5.0` is in `[dependency-groups] dev` but the CI test
-step runs `uv run pytest tests/ -v` without `--cov`. No coverage badge, no
-trend tracking, no minimum-coverage gate.
-
-**Why:** 1,085 tests against 14K LOC almost certainly yields high coverage,
-but we have no number to cite or regress against.
-
-**Context:** Flagged in the 2026-04-11 codebase audit (O1). Recommendation:
-
-    uv run pytest tests/ -v \
-      --cov=src/give_back \
-      --cov-report=term-missing \
-      --cov-fail-under=80
-
-Start at 80 and ratchet up once the baseline is known.
-
-**Depends on / blocked by:** Nothing.
-
 ## Add mypy or pyright to CI
 
 **What:** Every public function has type annotations and `from __future__

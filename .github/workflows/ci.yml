@@ -36,4 +36,4 @@ jobs:
         run: uv run ruff format --check src/ tests/
 
       - name: Test
-        run: uv run pytest tests/ -v
+        run: uv run pytest tests/ -v --cov=src/give_back --cov-report=term

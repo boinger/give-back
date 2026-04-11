@@ -1,4 +1,4 @@
-.PHONY: help install dev test test-cov test-hooks lint format format-fix format-check \
+.PHONY: help install dev test test-ci test-cov test-hooks lint format format-fix format-check \
         ci ci-fast fix setup-hooks pre-commit clean version build run
 
 help:
@@ -52,8 +52,13 @@ run:
 test:
 	uv run pytest tests/ -v
 
+# Coverage-enabled test run used by CI and `make ci`.
+# Separate from `make test` to keep local iteration fast.
+test-ci:
+	uv run pytest tests/ -v --cov=src/give_back --cov-report=term
+
 test-cov:
-	uv run pytest tests/ -v --cov=give_back --cov-report=html --cov-report=term
+	uv run pytest tests/ -v --cov=src/give_back --cov-report=html --cov-report=term
 
 test-hooks:
 	@bash tests/test_hooks_smoke.sh
@@ -73,7 +78,7 @@ format-check:
 # CI-equivalent checks. READ-ONLY — does not mutate files.
 # This target mirrors .github/workflows/ci.yml exactly. Run it before
 # pushing to catch everything CI will catch, without the network round-trip.
-ci: lint format-check test
+ci: lint format-check test-ci
 	@echo "CI-equivalent checks passed."
 
 # Fast format-check only. Used by the git pre-commit hook to keep

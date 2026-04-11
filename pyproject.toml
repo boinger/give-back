@@ -47,3 +47,14 @@ known-first-party = ["give_back"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/give_back"]
+# branch = true is deliberately NOT enabled today. Line coverage is 82%;
+# enabling branch would drop the number to an unknown value and make
+# the initial gate noisy. Revisit once the line gate is stable.
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
