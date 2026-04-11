@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from urllib.parse import quote
 
 from give_back.exceptions import RepoNotFoundError
 from give_back.github_client import GitHubClient
@@ -130,7 +131,13 @@ def fetch_file_content(client: GitHubClient, owner: str, repo: str, path: str) -
     Returns (content, line_count). On 404, returns ("", 0).
     """
     try:
-        data = client.rest_get(f"/repos/{owner}/{repo}/contents/{path}")
+        # URL-injection hardening: issue bodies are user-controlled and the path
+        # regex permits chars that are URL-syntactic (?, #, %). quote(safe='/')
+        # preserves path separators but escapes the injection surface. Does NOT
+        # address path traversal — `..` passes through, but the GitHub contents
+        # API resolves paths server-side inside the repo root so traversal is
+        # unexploitable against this endpoint.
+        data = client.rest_get(f"/repos/{owner}/{repo}/contents/{quote(path, safe='/')}")
     except RepoNotFoundError:
         return ("", 0)
 
@@ -173,7 +180,8 @@ def check_test_file(client: GitHubClient, owner: str, repo: str, source_path: st
 
     for candidate in candidates:
         try:
-            client.rest_get(f"/repos/{owner}/{repo}/contents/{candidate}")
+            # URL-injection hardening — see fetch_file_content for the threat model.
+            client.rest_get(f"/repos/{owner}/{repo}/contents/{quote(candidate, safe='/')}")
             return True
         except RepoNotFoundError:
             continue
