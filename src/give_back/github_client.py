@@ -151,6 +151,11 @@ class GitHubClient:
             return True  # Unknown budget, optimistic
         return self._rate_remaining >= calls
 
+    @property
+    def rate_remaining(self) -> int | None:
+        """Current core API rate-limit remaining, or None if unknown."""
+        return self._rate_remaining
+
     def check_rate_limit(self) -> dict:
         """Return current rate limit status from the API."""
         response = self._client.get("/rate_limit")

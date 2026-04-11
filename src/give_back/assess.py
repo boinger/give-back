@@ -136,7 +136,7 @@ def fetch_repo_data(client: GitHubClient, owner: str, repo: str, verbose: bool =
     graphql_data.setdefault("repository", {})["pullRequests"] = {"nodes": all_prs}
 
     if verbose:
-        remaining = client._rate_remaining
+        remaining = client.rate_remaining
         _console.print(f"  [dim]Rate limit remaining: {remaining} ({len(all_prs)} PRs fetched)[/dim]")
 
     # 2. REST: community profile
