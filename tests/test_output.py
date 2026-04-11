@@ -577,6 +577,39 @@ class TestPrintConventionsRich:
         # Issue line should not appear
         assert "#None" not in output
 
+    def test_cla_line_not_required(self):
+        """CLA line shows 'Not required' when cla_info.required is False (mirrors DCO)."""
+        output = _capture(print_conventions, _brief())
+        assert "CLA:" in output
+        assert "Not required" in output
+
+    def test_cla_line_required_with_url(self):
+        """CLA line shows system and signing URL when available."""
+        from give_back.conventions.models import CLAInfo
+
+        brief = _brief()
+        brief.cla_info = CLAInfo(
+            required=True,
+            system="cla-assistant",
+            signing_url="https://cla-assistant.io/pallets/flask",
+        )
+        output = _capture(print_conventions, brief)
+        assert "CLA:" in output
+        assert "Required" in output
+        assert "cla-assistant" in output
+        assert "https://cla-assistant.io/pallets/flask" in output
+
+    def test_cla_line_required_no_url(self):
+        """CLA line shows system only when signing_url is None."""
+        from give_back.conventions.models import CLAInfo
+
+        brief = _brief()
+        brief.cla_info = CLAInfo(required=True, system="unknown", signing_url=None)
+        output = _capture(print_conventions, brief)
+        assert "CLA:" in output
+        assert "Required" in output
+        assert "unknown" in output
+
 
 class TestPrintDepsRich:
     def test_contains_repo_info(self):

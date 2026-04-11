@@ -17,6 +17,7 @@ from pathlib import Path
 
 import httpx
 
+from give_back.conventions._contributing import iter_contributing_md
 from give_back.conventions.models import CLAInfo
 from give_back.exceptions import GiveBackError
 from give_back.github_client import GitHubClient
@@ -145,33 +146,19 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> t
 
 
 def _check_contributing_for_cla(clone_dir: Path) -> tuple[str, str] | None:
-    """Search CONTRIBUTING.md for known CLA system mentions.
+    """Search CONTRIBUTING.md variants for known CLA system mentions.
 
     Returns (system, detection_source) or None.
     """
-    candidates = (
-        "CONTRIBUTING.md",
-        "contributing.md",
-        "CONTRIBUTING.rst",
-        ".github/CONTRIBUTING.md",
-        "docs/CONTRIBUTING.md",
-    )
-    for name in candidates:
-        path = clone_dir / name
-        if path.is_file():
-            try:
-                content = path.read_text(encoding="utf-8", errors="replace").lower()
-            except OSError:
-                continue
-
-            if "apache" in content and ("icla" in content or "apache.org/licenses" in content):
-                return ("apache", "contributing-md")
-            if "google" in content and ("cla.developers.google.com" in content or "google cla" in content):
-                return ("google", "contributing-md")
-            if "easycla" in content or "lfx.linuxfoundation" in content:
-                return ("easycla", "contributing-md")
-            if "cla-assistant" in content:
-                return ("cla-assistant", "contributing-md")
+    for content in iter_contributing_md(clone_dir):
+        if "apache" in content and ("icla" in content or "apache.org/licenses" in content):
+            return ("apache", "contributing-md")
+        if "google" in content and ("cla.developers.google.com" in content or "google cla" in content):
+            return ("google", "contributing-md")
+        if "easycla" in content or "lfx.linuxfoundation" in content:
+            return ("easycla", "contributing-md")
+        if "cla-assistant" in content:
+            return ("cla-assistant", "contributing-md")
 
     return None
 

@@ -89,6 +89,16 @@ def print_conventions(brief: ContributionBrief, verbose: bool = False) -> None:
     # DCO
     dco_str = "[yellow]Required[/yellow]" if brief.dco_required else "Not required"
     _console.print(f"  [bold]DCO/Sign-off:[/bold] {dco_str}")
+
+    # CLA
+    if brief.cla_required:
+        if brief.cla_info.signing_url:
+            cla_str = f"[yellow]Required[/yellow] ({brief.cla_info.system}) — {brief.cla_info.signing_url}"
+        else:
+            cla_str = f"[yellow]Required[/yellow] ({brief.cla_info.system})"
+    else:
+        cla_str = "Not required"
+    _console.print(f"  [bold]CLA:[/bold] {cla_str}")
     _console.print()
 
     # Review process

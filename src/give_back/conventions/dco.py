@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
+
+from give_back.conventions._contributing import iter_contributing_md
+
+_REQUIRED_SIGNOFF_RE = re.compile(
+    r"(must|required|require)[^.]*signed-off-by",
+    re.IGNORECASE,
+)
 
 
 def _check_commits_for_signoff(clone_dir: Path) -> bool:
@@ -58,13 +66,39 @@ def _check_dco_file(clone_dir: Path) -> bool:
     return (clone_dir / ".dco").is_file()
 
 
+def _check_contributing_for_dco(clone_dir: Path) -> bool:
+    """Search CONTRIBUTING.md variants for DCO requirements.
+
+    Two signals (in order of confidence):
+    1. Literal phrase "developer certificate of origin" — used by Kubernetes,
+       Docker, CNCF projects, grafana/tempo, and the overwhelming majority of
+       DCO-requiring projects. High-confidence match.
+    2. Requirement regex: ``(must|required|require)[^.]*signed-off-by`` —
+       catches projects that document DCO without the literal phrase while
+       rejecting example-only mentions like "your commits should look like:
+       Signed-off-by: ...".
+    """
+    for content in iter_contributing_md(clone_dir):
+        if "developer certificate of origin" in content:
+            return True
+        if _REQUIRED_SIGNOFF_RE.search(content):
+            return True
+    return False
+
+
 def detect_dco(clone_dir: Path, ci_config_dir: Path | None = None) -> bool:
     """Detect whether DCO sign-off appears to be required.
 
-    Checks three signals:
-    1. Recent commits for Signed-off-by lines (>50% threshold).
+    Checks four signals in priority order (cheap-and-definitive to noisy):
+    1. A ``.dco`` file in the repo root.
     2. CI config for DCO bot references.
-    3. A .dco file in the repo root.
+    3. CONTRIBUTING.md variants for DCO requirement phrasing.
+    4. Recent commits for Signed-off-by lines (>50% threshold).
+
+    Signal 3 runs before signal 4 because reading a file is cheaper than
+    spawning a ``git log`` subprocess, and a documentation-level signal is
+    more reliable than commit-history heuristics (which miss projects that
+    only recently adopted DCO).
 
     Args:
         clone_dir: Path to the cloned repository.
@@ -77,6 +111,9 @@ def detect_dco(clone_dir: Path, ci_config_dir: Path | None = None) -> bool:
         return True
 
     if _check_ci_for_dco(clone_dir):
+        return True
+
+    if _check_contributing_for_dco(clone_dir):
         return True
 
     return _check_commits_for_signoff(clone_dir)
