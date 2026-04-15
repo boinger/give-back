@@ -356,6 +356,20 @@ skipping merge readiness check" and continue normally.
 
 Clean up: `rm -f "$_TMPFILE"`
 
+## Companion: /issue-forensics (upstream investigation)
+
+For non-trivial upstream findings, reach for `/issue-forensics` (slash
+command installed via [zorille](https://github.com/boinger/zorille/blob/main/issue-forensics/SKILL.md))
+before drafting the issue or PR. It produces a structured forensics draft;
+give-back's role is to carry that draft privately while the user works on
+the fix PR, then post the issue and PR together so drive-by contributors
+can't scrape a public issue and race their own submission. Skip it for
+routine typos — `/issue-forensics` has its own entry gate that
+short-circuits trivial cases to a quick-report path.
+
+Give-back is the carrier, not the drafter. Do not attempt to produce
+forensics content directly; delegate to `/issue-forensics`.
+
 ## Tone
 
 Be direct about what the signals mean for the user's time investment.
