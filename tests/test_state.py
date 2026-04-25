@@ -456,3 +456,134 @@ class TestLoadConfigErrors:
             result = load_config()
         assert result.workspace_dir == "~/give-back-workspaces"
         assert result.handoff_command is None
+
+
+class TestParseConfigYamlMalformedWarnings:
+    """Verify _parse_config_yaml emits stderr warnings when handoff: is malformed."""
+
+    def test_handoff_followed_by_unknown_key_warns(self, capsys):
+        """handoff: followed by an unrecognized indented line emits a warning."""
+        content = "handoff:\n  cmnd: cursor\n"  # typo: cmnd not command
+        config = _parse_config_yaml(content)
+        assert config.handoff_command is None
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "handoff" in captured.err
+        assert "cmnd" in captured.err
+
+    def test_handoff_with_no_command_at_all_warns(self, capsys):
+        """File ending with bare 'handoff:' and no command line emits a warning."""
+        content = "workspace_dir: ~/ws\nhandoff:\n"
+        config = _parse_config_yaml(content)
+        assert config.workspace_dir == "~/ws"
+        assert config.handoff_command is None
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        assert "no command" in captured.err
+
+    def test_inline_handoff_value_does_not_warn(self, capsys):
+        """handoff: command (inline) is parsed without a warning."""
+        content = 'handoff: "code ."\n'
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "code ."
+        captured = capsys.readouterr()
+        assert captured.err == ""
+
+    def test_well_formed_block_does_not_warn(self, capsys):
+        """The canonical handoff: \\n  command: ... shape parses silently."""
+        content = "handoff:\n  command: cursor\n"
+        config = _parse_config_yaml(content)
+        assert config.handoff_command == "cursor"
+        captured = capsys.readouterr()
+        assert captured.err == ""
+
+
+class TestPruneCacheSections:
+    """Verify save_state prunes expired and capped-out cache sections."""
+
+    def _make_assessment_entry(self, age_hours: float) -> dict:
+        ts = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).isoformat()
+        return {
+            "timestamp": ts,
+            "overall_tier": "green",
+            "gate_passed": True,
+            "incomplete": False,
+            "signals": [],
+        }
+
+    def _make_discover_entry(self, age_hours: float) -> dict:
+        ts = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).isoformat()
+        return {"timestamp": ts, "query": "test", "repos": []}
+
+    def test_ttl_sweep_drops_stale_entries(self, state_dir):
+        """Entries older than 24h get dropped on save_state."""
+        state = {
+            "version": 1,
+            "assessments": {
+                "owner/fresh": self._make_assessment_entry(age_hours=1),
+                "owner/stale": self._make_assessment_entry(age_hours=48),
+            },
+            "discover_cache": {
+                "hashfresh": self._make_discover_entry(age_hours=1),
+                "hashstale": self._make_discover_entry(age_hours=72),
+            },
+            "skip_list": [],
+        }
+        save_state(state)
+        loaded = load_state()
+        assert "owner/fresh" in loaded["assessments"]
+        assert "owner/stale" not in loaded["assessments"]
+        assert "hashfresh" in loaded["discover_cache"]
+        assert "hashstale" not in loaded["discover_cache"]
+
+    def test_secondary_cap_evicts_oldest_when_over_limit(self, state_dir):
+        """With > _MAX_CACHE_ENTRIES_PER_SECTION fresh entries, oldest get evicted."""
+        from give_back.state import _MAX_CACHE_ENTRIES_PER_SECTION
+
+        # Create cap+5 entries, all fresh (age 0..cap+5 minutes — all under TTL)
+        assessments = {}
+        for i in range(_MAX_CACHE_ENTRIES_PER_SECTION + 5):
+            assessments[f"owner/repo{i}"] = self._make_assessment_entry(age_hours=i / 60.0)
+        state = {"version": 1, "assessments": assessments, "skip_list": []}
+        save_state(state)
+        loaded = load_state()
+        assert len(loaded["assessments"]) == _MAX_CACHE_ENTRIES_PER_SECTION
+        # The 5 oldest (highest i, since age_hours = i/60) should be gone
+        for i in range(_MAX_CACHE_ENTRIES_PER_SECTION, _MAX_CACHE_ENTRIES_PER_SECTION + 5):
+            assert f"owner/repo{i}" not in loaded["assessments"]
+
+    def test_legacy_entries_evicted_first_by_cap(self, state_dir):
+        """Entries without a timestamp (legacy schema) are evicted first when over cap."""
+        from give_back.state import _MAX_CACHE_ENTRIES_PER_SECTION
+
+        # 5 legacy (no timestamp) + cap fresh entries → total = cap + 5
+        assessments = {}
+        for i in range(5):
+            assessments[f"owner/legacy{i}"] = {"overall_tier": "green", "signals": []}
+        for i in range(_MAX_CACHE_ENTRIES_PER_SECTION):
+            assessments[f"owner/fresh{i}"] = self._make_assessment_entry(age_hours=1)
+        state = {"version": 1, "assessments": assessments, "skip_list": []}
+        save_state(state)
+        loaded = load_state()
+        assert len(loaded["assessments"]) == _MAX_CACHE_ENTRIES_PER_SECTION
+        # All legacy entries should be gone (evicted first)
+        for i in range(5):
+            assert f"owner/legacy{i}" not in loaded["assessments"]
+        # All fresh entries should be retained
+        for i in range(_MAX_CACHE_ENTRIES_PER_SECTION):
+            assert f"owner/fresh{i}" in loaded["assessments"]
+
+    def test_legacy_entries_retained_when_under_cap(self, state_dir):
+        """Legacy entries (no timestamp) stay when section is under the cap."""
+        state = {
+            "version": 1,
+            "assessments": {
+                "owner/legacy": {"overall_tier": "green", "signals": []},
+                "owner/fresh": self._make_assessment_entry(age_hours=1),
+            },
+            "skip_list": [],
+        }
+        save_state(state)
+        loaded = load_state()
+        assert "owner/legacy" in loaded["assessments"]
+        assert "owner/fresh" in loaded["assessments"]

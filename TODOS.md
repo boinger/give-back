@@ -28,48 +28,6 @@ See `src/give_back/discover/search.py:_build_query` for the current gate.
 
 **Depends on / blocked by:** Nothing. Independent of other work.
 
-## Harden `_parse_config_yaml` or migrate to tomllib
-
-**What:** `state.py:_parse_config_yaml` is a hand-rolled YAML subset parser
-that silently drops lines it doesn't understand. A malformed `handoff.command`
-gets parsed as `handoff_command = None`, leaving the user wondering why their
-handoff didn't fire.
-
-**Why:** Two paths forward — either (a) keep the no-deps parser but emit a
-stderr warning when a recognized top-level key has unexpected shape, or
-(b) migrate config to TOML and use stdlib `tomllib` (Python 3.11+). TOML is
-strictly parseable, has clear semantics, and the dependency is already free.
-
-**Context:** Flagged in the 2026-04-11 codebase audit (N2). Current behavior
-is documented as intentional to avoid PyYAML, but `tomllib` came into stdlib
-after the original decision.
-
-**Depends on / blocked by:** If we go with (b), need to migrate any existing
-`~/.give-back/config.yaml` files users may have on disk. Probably best done
-as dual-format support first, then a deprecation window.
-
-## Bound growth of `~/.give-back/state.json` cache sections
-
-**What:** `state["assessments"]` and `state["discover_cache"]` grow without a
-per-section entry cap. TTL is applied on read (reject if stale) but `save_state`
-never prunes expired entries. A user who runs `discover` with many language/topic
-combinations accumulates entries forever.
-
-**Why:** Silent unbounded growth in a local JSON file. Impact is low in
-practice (<1 MB at hundreds of entries) but the growth is invisible and the
-file is rewritten atomically on every state change.
-
-**Context:** Flagged in the 2026-04-11 codebase audit (N3). `_MAX_AUDIT_HISTORY = 5`
-already caps audit history per repo — the pattern exists, just not applied to
-the other two sections.
-
-**Design question:** Cap by entry count (LRU-ish) or sweep expired entries on
-every `save_state`? Sweep is simpler but scans the whole dict on every write;
-cap-by-count needs LRU metadata. For typical usage patterns, periodic sweep
-on write is probably fine.
-
-**Depends on / blocked by:** Nothing.
-
 ## Triage residual depth-5 deep-nesting findings
 
 **What:** After the three refactor commits on 2026-04-11 (status.py, cli/discover.py,

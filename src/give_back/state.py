@@ -45,6 +45,13 @@ _DEFAULT_CACHE_TTL_HOURS = 24
 
 _MAX_AUDIT_HISTORY = 5
 
+# Hard backstop for cache section growth. The primary defense is the TTL
+# sweep in _prune_expired_cache_sections, but legacy entries that lack a
+# timestamp field can never be aged out — this cap guarantees no section
+# can grow without bound. Typical usage stays well under this; the cap is
+# a backstop, not a quota.
+_MAX_CACHE_ENTRIES_PER_SECTION = 50
+
 
 def _empty_state() -> dict:
     return {"version": _SCHEMA_VERSION, "assessments": {}, "skip_list": [], "audit_results": {}}
@@ -68,12 +75,92 @@ def load_state() -> dict:
         raise StateCorruptError(f"State file contains invalid JSON: {exc}") from exc
 
 
+def _entry_timestamp(entry: object) -> str | None:
+    """Extract the timestamp string from a cache entry, or None if missing.
+
+    Handles both shapes:
+    - discover_cache: ``{"timestamp": "...", "query": ..., "repos": [...]}``
+    - assessments: nested at ``entry["timestamp"]`` (Assessment serialization)
+    Returns the ISO string as-is; the caller compares lexicographically or
+    via ``datetime.fromisoformat``.
+    """
+    if not isinstance(entry, dict):
+        return None
+    ts = entry.get("timestamp")
+    return ts if isinstance(ts, str) and ts else None
+
+
+def _prune_expired_cache_sections(state: dict) -> None:
+    """Sweep ``assessments`` and ``discover_cache`` in-place.
+
+    Two layers:
+    1. TTL sweep: drop entries older than ``_DEFAULT_CACHE_TTL_HOURS``.
+    2. Hard cap: if a section still exceeds ``_MAX_CACHE_ENTRIES_PER_SECTION``,
+       evict timestamp-less entries first (legacy schema, can't be aged),
+       then oldest-by-timestamp until under the cap.
+
+    Best-effort. Any per-entry parse error keeps the entry rather than risking
+    user data loss from a parser bug.
+    """
+    now = datetime.now(timezone.utc)
+    ttl_seconds = _DEFAULT_CACHE_TTL_HOURS * 3600
+
+    for section_name in ("assessments", "discover_cache"):
+        section = state.get(section_name)
+        if not isinstance(section, dict) or not section:
+            continue
+
+        # Layer 1: TTL sweep
+        for key in list(section.keys()):
+            ts_str = _entry_timestamp(section[key])
+            if ts_str is None:
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str)
+            except ValueError:
+                continue
+            if (now - ts).total_seconds() > ttl_seconds:
+                del section[key]
+
+        # Layer 2: hard cap
+        if len(section) <= _MAX_CACHE_ENTRIES_PER_SECTION:
+            continue
+
+        # Bucket entries by whether they have a usable timestamp
+        with_ts: list[tuple[str, datetime]] = []
+        without_ts: list[str] = []
+        for key, entry in section.items():
+            ts_str = _entry_timestamp(entry)
+            if ts_str is None:
+                without_ts.append(key)
+                continue
+            try:
+                with_ts.append((key, datetime.fromisoformat(ts_str)))
+            except ValueError:
+                without_ts.append(key)
+
+        # Evict timestamp-less first (we can't age them via the TTL sweep)
+        excess = len(section) - _MAX_CACHE_ENTRIES_PER_SECTION
+        for key in without_ts[:excess]:
+            del section[key]
+            excess -= 1
+
+        # Then evict oldest by timestamp
+        if excess > 0:
+            with_ts.sort(key=lambda pair: pair[1])  # oldest first
+            for key, _ts in with_ts[:excess]:
+                del section[key]
+
+
 def save_state(state: dict) -> None:
     """Save state to disk atomically (write to temp, then rename).
 
-    Silently creates ~/.give-back/ if it doesn't exist.
+    Silently creates ~/.give-back/ if it doesn't exist. Prunes expired
+    and capped-out cache sections before writing — see
+    ``_prune_expired_cache_sections``.
     """
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    _prune_expired_cache_sections(state)
     atomic_write_text(STATE_FILE, json.dumps(state, indent=2))
 
 
@@ -342,7 +429,14 @@ def _parse_config_yaml(content: str) -> Config:
       workspace_dir: ~/path
       handoff:
         command: "some command"
+
+    When a recognized top-level key (``handoff:``) is followed by lines
+    that the parser cannot match as a known nested field (e.g. wrong
+    indent, missing colon, unexpected key name), emits a one-line stderr
+    warning so the user knows their config was partially ignored.
     """
+    import sys
+
     workspace_dir = Config.workspace_dir
     handoff_command = None
 
@@ -350,6 +444,7 @@ def _parse_config_yaml(content: str) -> Config:
     content = content.lstrip("\ufeff")
 
     in_handoff = False
+    handoff_consumed = False
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -362,18 +457,38 @@ def _parse_config_yaml(content: str) -> Config:
             in_handoff = False
 
         elif stripped == "handoff:" or stripped.startswith("handoff:"):
-            # Check if there's an inline value (shouldn't be, but handle it)
             after = stripped.split(":", 1)[1].strip()
             if after and after not in ("null", "~"):
                 handoff_command = after.strip("\"'")
                 in_handoff = False
+                handoff_consumed = True
             else:
                 in_handoff = True
+                handoff_consumed = False
 
         elif in_handoff and stripped.startswith("command:"):
             value = stripped.split(":", 1)[1].strip().strip("\"'")
             if value and value not in ("null", "~"):
                 handoff_command = value
             in_handoff = False
+            handoff_consumed = True
+
+        elif in_handoff:
+            # We saw "handoff:" then a line that isn't "command:". The user
+            # likely got the indent or key name wrong \u2014 warn so they don't
+            # silently lose their handoff.
+            print(
+                f"Warning: unexpected line under handoff: in {CONFIG_FILE}: {stripped!r}. "
+                "Expected 'command: \"...\"'. Handoff command not set.",
+                file=sys.stderr,
+            )
+            in_handoff = False
+
+    if in_handoff and not handoff_consumed:
+        # File ended after "handoff:" with no command line at all.
+        print(
+            f"Warning: handoff: block in {CONFIG_FILE} has no command. Handoff command not set.",
+            file=sys.stderr,
+        )
 
     return Config(workspace_dir=workspace_dir, handoff_command=handoff_command)
