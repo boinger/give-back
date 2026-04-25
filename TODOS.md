@@ -109,23 +109,3 @@ ecosystem, pyright is faster and Microsoft-backed.
 
 **Depends on / blocked by:** Nothing.
 
-## CI workflow hygiene (concurrency, SHA pinning, caching)
-
-**What:** `.github/workflows/ci.yml` has three minor gaps:
-1. No `concurrency:` group — force-push on a PR branch triggers concurrent runs
-2. Actions pinned by tag (`@v5`) rather than SHA — standard OSS practice but
-   less secure against action-repo compromise
-3. No explicit dependency caching via `setup-uv`'s cache key
-
-**Why:** Each gap is individually minor for a one-job workflow on a solo
-project, but combined they represent the kind of friction-free hygiene
-improvements that add up.
-
-**Context:** Flagged in the 2026-04-11 codebase audit (O3). Canonical
-`concurrency:` block:
-
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-
-**Depends on / blocked by:** Nothing.
