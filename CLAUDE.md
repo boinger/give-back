@@ -72,6 +72,11 @@ list in `signals/__init__.py`.
   warnings (always). When adding new CLI output, decide: is it an *advisory hint* (human
   UX) or an *operational warning* (signal)? Hints get TTY-gated; warnings don't. See
   the "Machine-readable output (`--json`)" section in README.md for the full contract.
+- **CLI nesting cap.** When a Click command grows new conditional branching,
+  extract the leaf cases into helper functions instead of inlining (target depth ≤4).
+  CI runs `sloppylint --max-score 151` against `src/` as a regression gate; the
+  threshold is the measured score at adoption time, not a target. If a legitimate
+  change pushes the score up, raise the gate in the same PR with a one-line note.
 
 ## Commands
 

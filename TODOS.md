@@ -28,29 +28,6 @@ See `src/give_back/discover/search.py:_build_query` for the current gate.
 
 **Depends on / blocked by:** Nothing. Independent of other work.
 
-## Triage residual depth-5 deep-nesting findings
-
-**What:** After the three refactor commits on 2026-04-11 (status.py, cli/discover.py,
-conventions/*.py), 17 depth-5 deep-nesting findings remain in `cli/*.py`,
-`output/*.py`, `audit.py`, `audit_fix/fix.py`, and others. Most are legitimate
-Click command shape (`command → try → with client → if json → action`) and
-should be left alone. A few (`cli/check.py:163-168`, `cli/assess.py:76-130`,
-`audit_fix/contributing.py:125`) might benefit from extract-function but
-aren't causing pain.
-
-**Why:** Fighting sloppylint's 5-level threshold is linter gaming, not cleaner
-code. But if any of these functions grow further, extract at that point. The
-natural touch point is whenever a Click command gains new conditional
-branching.
-
-**Context:** Flagged in the 2026-04-11 codebase audit (N4). sloppylint total
-score after the 2026-04-11 refactors is 143 (down from 319 at session start).
-Adopting `sloppylint --ci --max-score 143` as a regression gate would prevent
-drift without forcing a cleanup campaign.
-
-**Depends on / blocked by:** Nothing. Passive — revisit when touching any of
-the flagged functions.
-
 ## Add mypy or pyright to CI
 
 **What:** Every public function has type annotations and `from __future__

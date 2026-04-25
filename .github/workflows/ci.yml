@@ -44,3 +44,6 @@ jobs:
 
       - name: Test
         run: uv run pytest tests/ -v --cov=src/give_back --cov-report=term
+
+      - name: Sloppylint regression gate
+        run: uv run --with sloppylint sloppylint --max-score 151 src/
