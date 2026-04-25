@@ -97,6 +97,7 @@ def check(verbose: bool, acknowledge: str | None) -> None:
         capture_output=True,
         text=True,
         cwd=cwd,
+        timeout=10,
     )
     staged_files = []
     if result.returncode == 0:
@@ -111,6 +112,7 @@ def check(verbose: bool, acknowledge: str | None) -> None:
         capture_output=True,
         text=True,
         cwd=cwd,
+        timeout=10,
     )
     commit_msg = result.stdout.strip() if result.returncode == 0 else ""
 
@@ -121,6 +123,7 @@ def check(verbose: bool, acknowledge: str | None) -> None:
         capture_output=True,
         text=True,
         cwd=cwd,
+        timeout=30,
     )
     if result.returncode == 0:
         try:

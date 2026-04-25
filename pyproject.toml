@@ -29,7 +29,7 @@ give-back = "give_back.cli:cli"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-cov>=5.0",
     "ruff>=0.8.0",
     "respx>=0.22",
