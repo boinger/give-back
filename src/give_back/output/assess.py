@@ -6,6 +6,7 @@ import json
 
 from rich.table import Table
 
+from give_back.console import stderr_console
 from give_back.models import Assessment, SignalWeight, Tier
 from give_back.output._shared import _TIER_COLORS, _TIER_LABELS, _WEIGHT_LABELS, _console
 
@@ -100,8 +101,12 @@ def print_assessment_json(assessment: Assessment, signal_names: list[str]) -> No
 
 
 def print_cached_notice(owner: str, repo: str, timestamp: str) -> None:
-    """Print a notice that cached results are being used."""
-    _console.print(f"  [dim]Using cached assessment from {timestamp}. Use --no-cache to refresh.[/dim]")
+    """Print a notice that cached results are being used.
+
+    Goes to stderr so the JSON payload on stdout stays parseable when the
+    caller runs ``assess --json | jq`` against a cache hit.
+    """
+    stderr_console.print(f"  [dim]Using cached assessment from {timestamp}. Use --no-cache to refresh.[/dim]")
 
 
 def _build_summary(assessment: Assessment, signal_names: list[str]) -> str:
