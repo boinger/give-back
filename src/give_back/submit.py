@@ -175,17 +175,19 @@ def _open_editor(file_path: Path) -> None:
         raise SubmitError("No editor configured. Set $EDITOR or git config core.editor.")
 
     try:
-        result = subprocess.run(
+        # Editor doesn't capture stdout/stderr — they pass through to the terminal,
+        # so we don't need text=True. We only consume the returncode.
+        edit_returncode = subprocess.run(
             shlex.split(editor) + [str(file_path)],
             timeout=600,
-        )
+        ).returncode
     except FileNotFoundError as exc:
         raise SubmitError(f"Editor '{editor}' not found") from exc
     except subprocess.TimeoutExpired as exc:
         raise SubmitError("Editor timed out after 10 minutes") from exc
 
-    if result.returncode != 0:
-        raise SubmitError(f"Editor exited with code {result.returncode}")
+    if edit_returncode != 0:
+        raise SubmitError(f"Editor exited with code {edit_returncode}")
 
 
 def _create_pr(

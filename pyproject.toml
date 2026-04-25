@@ -33,7 +33,17 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.8.0",
     "respx>=0.22",
+    "mypy>=1.13",
 ]
+
+[tool.mypy]
+# Non-strict baseline. Strict mode surfaced 116 errors at adoption (2026-04-25);
+# the scope-cap protocol routed us to the non-strict path. The 24 non-strict
+# errors are fixed in PR-B; ratchet to strict in a follow-up — see TODOS.md.
+python_version = "3.11"
+files = ["src/"]
+exclude = ["src/give_back/_version.py"]
+warn_unused_ignores = true
 
 [tool.ruff]
 line-length = 120

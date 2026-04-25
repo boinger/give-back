@@ -60,17 +60,20 @@ class DefaultGroup(click.Group):
     ignore_unknown_options = True
 
     def __init__(self, *args: object, **kwargs: object) -> None:
-        self.default_cmd_name = kwargs.pop("default", None)
-        self.default_if_no_args = kwargs.pop("default_if_no_args", False)
+        # The kwargs.pop calls return `object` per **kwargs typing; narrow to the
+        # specific types we actually require for downstream str/bool operations.
+        default_cmd = kwargs.pop("default", None)
+        self.default_cmd_name: str | None = default_cmd if isinstance(default_cmd, str) else None
+        self.default_if_no_args: bool = bool(kwargs.pop("default_if_no_args", False))
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        if not args and self.default_if_no_args:
+        if not args and self.default_if_no_args and self.default_cmd_name is not None:
             args.insert(0, self.default_cmd_name)
         return super().parse_args(ctx, args)
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
-        if cmd_name not in self.commands:
+        if cmd_name not in self.commands and self.default_cmd_name is not None:
             # Unknown subcommand — stash it and route to the default
             ctx.arg0 = cmd_name  # type: ignore[attr-defined]
             cmd_name = self.default_cmd_name

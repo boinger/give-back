@@ -158,9 +158,11 @@ def print_audit_comparison(report_a: AuditReport, report_b: AuditReport) -> None
     # Group by category for display
     by_category: dict[str, list[str]] = {}
     for name in all_names:
-        item = items_a.get(name) or items_b.get(name)
-        if item:
-            by_category.setdefault(item.category, []).append(name)
+        # Distinct name from the earlier loop's `item: AuditItem`; this lookup
+        # may return None when one report doesn't have the check.
+        category_item = items_a.get(name) or items_b.get(name)
+        if category_item:
+            by_category.setdefault(category_item.category, []).append(name)
 
     label_a = report_a.repo
     label_b = report_b.repo

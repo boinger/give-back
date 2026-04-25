@@ -148,10 +148,10 @@ def assess_issue(
     issue_title = issue.get("title", f"Issue #{issue_number}")
     issue_body = issue.get("body", "") or ""
 
-    # Fetch comments
-    comments_data = client.rest_get(f"/repos/{owner}/{repo}/issues/{issue_number}/comments")
-    if not isinstance(comments_data, list):
-        comments_data = []
+    # Fetch comments. /issues/{N}/comments returns a JSON array, but rest_get
+    # is typed as -> dict for the common case; narrow to list here.
+    raw_comments = client.rest_get(f"/repos/{owner}/{repo}/issues/{issue_number}/comments")
+    comments_data: list[dict] = raw_comments if isinstance(raw_comments, list) else []
 
     # Identify referenced files
     file_paths = identify_files(issue_body, comments_data)

@@ -118,7 +118,11 @@ def print_batch_results(results: list[tuple[dict, AuditReport | None, str | None
 
     for repo, error in errors:
         slug = repo["full_name"]
-        table.add_row("—", slug, "[red]error[/red]", f"[dim]{error[:40]}[/dim]")
+        # The error tuples land here only when report is None and the except path
+        # set error = str(exc); mypy still sees Optional via the tuple type, so
+        # narrow defensively.
+        msg = (error or "")[:40]
+        table.add_row("—", slug, "[red]error[/red]", f"[dim]{msg}[/dim]")
 
     console.print(table)
     console.print()

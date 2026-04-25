@@ -23,6 +23,7 @@ Retry/throttle flow:
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import httpx
 
@@ -173,8 +174,14 @@ class GitHubClient:
 
     # --- Internal ---
 
-    def _request_with_retry(self, method: str, url: str, **kwargs: object) -> httpx.Response:
-        """Execute an HTTP request with retry on timeout and rate limit handling."""
+    def _request_with_retry(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Execute an HTTP request with retry on timeout and rate limit handling.
+
+        ``**kwargs`` is typed as ``Any`` because they pass through to
+        ``httpx.Client.request``, which is overloaded with a complex union of
+        per-parameter types (json, params, headers, cookies, auth, follow_redirects,
+        timeout). Narrowing here would require enumerating all of them.
+        """
         self._check_rate_limit()
 
         backoff = _INITIAL_BACKOFF
@@ -225,8 +232,9 @@ class GitHubClient:
 
         if response.status_code == 429:
             retry_after = response.headers.get("Retry-After")
-            reset_at = int(time.time()) + int(retry_after) if retry_after else None
-            raise RateLimitError("GitHub API rate limit exceeded (429).", reset_at=reset_at)
+            # Distinct name so mypy doesn't carry the int inference from the 403 branch above.
+            retry_reset_at: int | None = int(time.time()) + int(retry_after) if retry_after else None
+            raise RateLimitError("GitHub API rate limit exceeded (429).", reset_at=retry_reset_at)
 
         # Split remaining error codes: 5xx = retryable server error, other 4xx = client error.
         if 500 <= response.status_code < 600:

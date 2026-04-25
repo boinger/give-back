@@ -28,19 +28,31 @@ See `src/give_back/discover/search.py:_build_query` for the current gate.
 
 **Depends on / blocked by:** Nothing. Independent of other work.
 
-## Add mypy or pyright to CI
+## Ratchet mypy to strict mode
 
-**What:** Every public function has type annotations and `from __future__
-import annotations` is used consistently, but no static type checker runs.
-No `mypy.ini`, no `pyrightconfig.json`, no CI step.
+**What:** mypy was adopted in non-strict mode on 2026-04-25 (24 errors fixed
+in the same PR). Strict mode surfaces an additional 92 errors across the
+codebase, predominantly:
 
-**Why:** A codebase this type-disciplined is the ideal target for strict
-type checking. First run will almost certainly catch latent signature-drift
-issues that runtime tests miss.
+- 74 `[type-arg]` errors — generic types missing parameters (`dict` → `dict[str, X]`,
+  `list` → `list[X]`)
+- 11 `[no-any-return]` — functions returning Any from typed call sites
+- 5 `[no-untyped-def]` — functions missing annotations (mostly private helpers
+  and test fixtures)
 
-**Context:** Flagged in the 2026-04-11 codebase audit (O2). `mypy --strict`
-vs `pyright --strict` is a taste call — mypy is more common in the Python
-ecosystem, pyright is faster and Microsoft-backed.
+**Why:** This codebase is well-typed; strict mode is the right long-term posture.
+The non-strict baseline was a scope-cap decision (>50 strict errors → defer per
+the scope-cap protocol in plan-fixes 0.1.0).
+
+**Context:** First-run measurement on commit aff1d2b: 116 strict errors across
+33 files. Non-strict baseline: 24 errors fixed inline. The expectation is to
+ratchet over 2-3 follow-up PRs:
+
+1. Enable `disallow_untyped_defs` and fix the 5 `[no-untyped-def]` errors.
+2. Enable `disallow_any_generics` to surface `[type-arg]` and fix in waves of
+   ~20 files per PR.
+3. Enable `warn_return_any` to surface `[no-any-return]` and fix.
+4. Flip `strict = true` once the underlying flags are all on.
 
 **Depends on / blocked by:** Nothing.
 

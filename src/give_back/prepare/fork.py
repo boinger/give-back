@@ -28,6 +28,7 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
         result = subprocess.run(
             ["gh", "--version"],
             capture_output=True,
+            text=True,
             timeout=10,
         )
     except FileNotFoundError:
@@ -42,6 +43,7 @@ def ensure_fork(owner: str, repo: str) -> tuple[str, str]:
         result = subprocess.run(
             ["gh", "auth", "status"],
             capture_output=True,
+            text=True,
             timeout=10,
         )
     except subprocess.TimeoutExpired:
