@@ -8,11 +8,15 @@ step has independent rollback. Full design context lives in
 
 ## Sequence
 
-- [ ] **Step 0** — Bump `mypy` 1.20.2 → 2.0.0 in isolation (no strict
-      flag changes). PR title: `chore(deps): bump mypy 1.20.2 -> 2.0.0`.
-- [ ] **Step 1** — Enable `disallow_untyped_defs`. Fixes 5
-      `[no-untyped-def]` errors in `assess.py`, `exceptions.py`,
-      `calibrate.py`.
+- [x] **Step 0** — Bumped `mypy` 1.20.2 → 2.0.0 in isolation (commits
+      `45a29e0` + `2888233`, landed on `main` 2026-05-07). Codebase
+      already on PEP 585/604 syntax; zero source changes needed for the
+      2.0 default flips (`--local-partial-types`, `--strict-bytes`).
+- [x] **Step 1** — Enabled `disallow_untyped_defs`. Fixed 5
+      `[no-untyped-def]` errors. Files actually touched (different from
+      the TODOS.md prediction; codebase moved between 2026-04-25 and
+      2026-05-07): `output/check.py`, `calibrate.py` (×2), `audit.py`,
+      `cli/discover.py`.
 - [ ] **Step 2a** — Enable `disallow_any_generics`. First wave of
       `[type-arg]` fixes: `state.py`, `guardrails.py`, `audit.py`.
 - [ ] **Step 2b/c** — Remaining `[type-arg]` fixes (split only if

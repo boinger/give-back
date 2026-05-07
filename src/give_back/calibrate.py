@@ -12,10 +12,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from give_back.assess import run_assessment as _run_assessment
+from give_back.github_client import GitHubClient
 from give_back.models import (
     TIER_GREEN_THRESHOLD,
     TIER_YELLOW_THRESHOLD,
     WEIGHT_MULTIPLIERS,
+    Assessment,
     SignalWeight,
     Tier,
 )
@@ -119,7 +121,7 @@ def _parse_yaml(text: str) -> list[CalibrationEntry]:
     return entries
 
 
-def compute_weighted_average(assessment) -> float:
+def compute_weighted_average(assessment: Assessment) -> float:
     """Compute the weighted average score from an Assessment's signals.
 
     Mirrors the logic in scoring.py but returns the raw average value.
@@ -144,7 +146,7 @@ def compute_weighted_average(assessment) -> float:
 
 
 def run_calibration(
-    client,
+    client: GitHubClient,
     entries: list[CalibrationEntry],
     verbose: bool = False,
 ) -> CalibrationResult:

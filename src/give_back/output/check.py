@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from give_back.conventions.models import ContributionBrief
 from give_back.output._shared import _console
@@ -65,7 +66,7 @@ def print_check_results(
 
 
 def print_prepare_json(
-    workspace_path,
+    workspace_path: Path,
     branch_name: str,
     brief: ContributionBrief,
     action_plan_text: str,

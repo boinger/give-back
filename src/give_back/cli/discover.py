@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 import click
 
@@ -15,10 +16,13 @@ from give_back.exceptions import (
 )
 from give_back.github_client import GitHubClient
 
+if TYPE_CHECKING:
+    from give_back.discover.search import DiscoverSummary
+
 
 def _run_interactive_discover_loop(
     client: GitHubClient,
-    summary,
+    summary: DiscoverSummary,
     *,
     language: str | None,
     topic: str | None,

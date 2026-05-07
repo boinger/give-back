@@ -13,6 +13,7 @@ import httpx
 
 from give_back.assess import evaluate_signals, fetch_repo_data
 from give_back.conventions.brief import scan_conventions
+from give_back.conventions.models import ContributionBrief
 from give_back.exceptions import GiveBackError, RepoNotFoundError
 from give_back.github_client import GitHubClient
 from give_back.models import RepoData, Tier
@@ -261,7 +262,7 @@ def _wrap_signals(assessment_signals: list, signal_names: list[str]) -> list[Aud
 # ---------------------------------------------------------------------------
 
 
-def _wrap_conventions(brief) -> list[AuditItem]:
+def _wrap_conventions(brief: ContributionBrief) -> list[AuditItem]:
     """Convert convention scan results to informational AuditItems."""
     items: list[AuditItem] = []
 

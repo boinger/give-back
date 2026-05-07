@@ -37,13 +37,14 @@ dev = [
 ]
 
 [tool.mypy]
-# Non-strict baseline. Strict mode surfaced 116 errors at adoption (2026-04-25);
-# the scope-cap protocol routed us to the non-strict path. The 24 non-strict
-# errors are fixed in PR-B; ratchet to strict in a follow-up — see TODOS.md.
+# Strict-mode ratchet in progress (see plans/PLAN-mypy-2-and-strict-ratchet.md).
+# Step 1 (this PR): disallow_untyped_defs. Steps 2-3 layer disallow_any_generics
+# and warn_return_any; Step 4 flips strict = true and removes the explicit flags.
 python_version = "3.11"
 files = ["src/"]
 exclude = ["src/give_back/_version.py"]
 warn_unused_ignores = true
+disallow_untyped_defs = true
 
 [tool.ruff]
 line-length = 120
