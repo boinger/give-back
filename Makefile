@@ -1,5 +1,5 @@
 .PHONY: help install dev test test-ci test-cov test-hooks lint format format-fix format-check \
-        ci ci-fast fix setup-hooks pre-commit clean version build run
+        type-check sloppylint ci ci-fast fix setup-hooks pre-commit clean version build run
 
 help:
 	@echo "give-back - Development Commands"
@@ -18,9 +18,11 @@ help:
 	@echo "  make lint        - Run linter (ruff check)"
 	@echo "  make format      - Format code (ruff format, mutates files)"
 	@echo "  make format-check- Check formatting (ruff format --check, read-only)"
+	@echo "  make type-check  - Run mypy in strict mode"
+	@echo "  make sloppylint  - Run sloppylint regression gate"
 	@echo ""
 	@echo "Quality gates:"
-	@echo "  make ci          - Run CI-equivalent checks (lint + format-check + test, READ-ONLY)"
+	@echo "  make ci          - Run all CI-equivalent checks locally (READ-ONLY)"
 	@echo "  make ci-fast     - Fast format-check only (used by the git pre-commit hook)"
 	@echo "  make fix         - Auto-format + auto-fix ruff lint issues"
 	@echo "  make pre-commit  - Alias for 'make ci' (backward compat)"
@@ -75,10 +77,16 @@ format-fix:
 format-check:
 	uv run ruff format --check src/ tests/
 
+type-check:
+	uv run mypy src/
+
+sloppylint:
+	uv run --with sloppylint sloppylint --max-score 151 src/
+
 # CI-equivalent checks. READ-ONLY — does not mutate files.
 # This target mirrors .github/workflows/ci.yml exactly. Run it before
 # pushing to catch everything CI will catch, without the network round-trip.
-ci: lint format-check test-ci
+ci: lint format-check type-check test-ci sloppylint
 	@echo "CI-equivalent checks passed."
 
 # Fast format-check only. Used by the git pre-commit hook to keep

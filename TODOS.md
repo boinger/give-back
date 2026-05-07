@@ -28,37 +28,6 @@ See `src/give_back/discover/search.py:_build_query` for the current gate.
 
 **Depends on / blocked by:** Nothing. Independent of other work.
 
-## Consolidate `make ci` to include mypy and sloppylint
-
-**What:** `make ci` currently runs `lint + format-check + test-ci` only.
-mypy and sloppylint are gated only by `.github/workflows/ci.yml` (mypy on
-Python 3.11, sloppylint as a separate step). Local `make ci` passes even
-when those gates would fail in GitHub Actions.
-
-**Why:** Local verification should match CI exactly. The "Before you
-submit" section of CONTRIBUTING.md tells contributors `make ci` runs
-"exactly the same checks CI runs" — that's no longer true after mypy and
-sloppylint were added. Closing the gap restores the contract.
-
-**Pros:** Contributors catch mypy/sloppylint regressions before push
-instead of CI-failure-and-revert cycle. CONTRIBUTING.md becomes accurate
-again. No CI workflow change needed (the duplication is intentional —
-local mirror of remote).
-
-**Cons:** `make ci` becomes slower (mypy adds ~10s, sloppylint ~3s).
-Could be mitigated with a `make ci-fast`-style split, but `make ci-fast`
-already exists for the pre-commit hook.
-
-**Context:** Surfaced during the mypy 2.0 + strict ratchet plan-eng-review
-on 2026-05-06. The ratchet plan worked around the gap by invoking mypy
-and sloppylint explicitly per step, which is fine for that plan but
-doesn't fix the durable issue. Right approach: after the ratchet lands,
-add `mypy` and `sloppylint` rules to the Makefile and update
-CONTRIBUTING.md.
-
-**Depends on / blocked by:** Mypy strict ratchet (so the consolidated
-`make ci` reflects strict-mode behavior, not non-strict).
-
 ## Widen mypy CI to the full Python version matrix
 
 **What:** `.github/workflows/ci.yml` currently runs mypy only when

@@ -18,11 +18,15 @@ uv sync --group dev
 make ci
 ```
 
-This runs `ruff check`, `ruff format --check`, and the full test suite —
-exactly the same checks CI runs. Everything must pass.
+This runs `ruff check`, `ruff format --check`, `mypy src/`, the full test
+suite with coverage, and the sloppylint regression gate — exactly the
+same checks CI runs. Everything must pass.
 
 If `make ci` fails on formatting, run `make fix` to auto-format and
 auto-fix ruff lint issues, then re-run `make ci`.
+
+Individual gates are also available: `make lint`, `make format-check`,
+`make type-check`, `make sloppylint`, `make test`.
 
 `make pre-commit` is kept as a backward-compat alias.
 
