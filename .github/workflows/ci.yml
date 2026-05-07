@@ -34,7 +34,9 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --group dev
+        env:
+          PYV: ${{ matrix.python-version }}
+        run: uv sync --group dev --python "$PYV"
 
       - name: Lint
         run: uv run ruff check src/ tests/
@@ -42,9 +44,15 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src/ tests/
 
+      - name: Verify interpreter binding
+        run: |
+          uv run python --version
+          uv run mypy --version
+
       - name: Type check
-        if: matrix.python-version == '3.11'
-        run: uv run mypy src/
+        env:
+          PYV: ${{ matrix.python-version }}
+        run: uv run mypy src/ --python-version "$PYV"
 
       - name: Test
         run: uv run pytest tests/ -v --cov=src/give_back --cov-report=term

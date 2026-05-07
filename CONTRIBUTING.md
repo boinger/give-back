@@ -28,6 +28,11 @@ auto-fix ruff lint issues, then re-run `make ci`.
 Individual gates are also available: `make lint`, `make format-check`,
 `make type-check`, `make sloppylint`, `make test`.
 
+`make type-check` runs against Python 3.11 (the project's floor) by
+default. CI runs mypy against the full matrix (3.11/3.12/3.13). To
+reproduce a non-3.11 CI failure locally, run:
+`uv run mypy src/ --python-version 3.13` (or 3.12).
+
 `make pre-commit` is kept as a backward-compat alias.
 
 ### Git hooks

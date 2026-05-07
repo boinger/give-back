@@ -28,31 +28,3 @@ See `src/give_back/discover/search.py:_build_query` for the current gate.
 
 **Depends on / blocked by:** Nothing. Independent of other work.
 
-## Widen mypy CI to the full Python version matrix
-
-**What:** `.github/workflows/ci.yml` currently runs mypy only when
-`matrix.python-version == '3.11'`. The full matrix is 3.11/3.12/3.13.
-Drop the guard so mypy runs on all three.
-
-**Why:** Type errors can be Python-version-conditional. mypy's behavior
-depends on `python_version` config and on stub availability per
-interpreter. Catching cross-version drift in CI is cheap once the
-single-version baseline is clean.
-
-**Pros:** Catches version-conditional issues (e.g., `typing` vs
-`collections.abc` differences, version-gated stubs) at PR time rather
-than in production. Modest CI-time increase.
-
-**Cons:** ~20 extra seconds of CI time per push (mypy is fast, but 3x
-isn't free). Slight risk of flakes if a stub mismatch only affects one
-interpreter.
-
-**Context:** Surfaced during the mypy 2.0 + strict ratchet plan-eng-review
-on 2026-05-06. The single-version guard was reasonable for the
-non-strict baseline (mypy is mypy — version-of-target shouldn't matter
-much). Becomes more valuable once `strict = true` lands and the project
-relies on tight type safety across all supported runtimes.
-
-**Depends on / blocked by:** Mypy strict ratchet (no point widening
-matrix while we're still ratcheting flag-by-flag).
-
