@@ -31,10 +31,20 @@ step has independent rollback. Full design context lives in
       results), 1 in `prepare/lifecycle.py` (`json.loads`), 1 in
       `audit_fix/templates.py` (click prompt). Pattern: `cast(...)` for
       JSON-shaped returns, `bool(...)` wrap for the click case.
-- [ ] **Step 4** — Probe with `uv run mypy src/ --strict`; fix any new
-      error codes that surface; replace the four flags with
-      `strict = true`. Remove the strict-ratchet item from `TODOS.md`
-      and update the `[tool.mypy]` comment block.
+- [x] **Step 4** — Probe surfaced 1 new error from `--strict` beyond the
+      three explicit flags: `[attr-defined]` in `cli/__init__.py:9` from
+      `--no-implicit-reexport` (bundled into `--strict`). Fixed by adding
+      `__all__ = ["__version__"]` to `give_back/__init__.py`. Replaced
+      the three flag lines with `strict = true`, updated the
+      `[tool.mypy]` comment block to note the ratchet is complete,
+      removed the "Ratchet mypy to strict mode" item from `TODOS.md`.
+
+## Status: complete (2026-05-07)
+
+The non-strict baseline (adopted 2026-04-25) was upgraded to `strict = true`
+in four sequential PRs landing the same day after the mypy 1.20.2 → 2.0.0
+bump. All five PRs landed direct-to-main; CI green on Python 3.11/3.12/3.13
+for each.
 
 ## Per-step verification (every step)
 
