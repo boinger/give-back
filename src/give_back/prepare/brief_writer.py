@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from give_back.conventions.models import ContributionBrief
 from give_back.state import atomic_write_text
@@ -17,7 +18,7 @@ def write_brief(
     branch_name: str,
     upstream_owner: str,
     fork_owner: str | None = None,
-    previous_issues: list[dict] | None = None,
+    previous_issues: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Write human-readable brief and machine-readable context to workspace.
 
@@ -190,8 +191,8 @@ def _build_context(
     branch_name: str,
     upstream_owner: str,
     fork_owner: str | None = None,
-    previous_issues: list[dict] | None = None,
-) -> dict:
+    previous_issues: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build machine-readable context dict for the check command."""
     ci_commands: list[str] = []
     if brief.test_info.run_command:

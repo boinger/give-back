@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -159,7 +160,7 @@ def _check_pr_comments_for_cla(client: GitHubClient, owner: str, repo: str) -> t
     return None
 
 
-def _match_cla_bot_comment(comment: dict) -> tuple[str, str | None] | None:
+def _match_cla_bot_comment(comment: dict[str, Any]) -> tuple[str, str | None] | None:
     """Return (login, signing_url) if a comment is from a known CLA bot, else None.
 
     EasyCLA comments embed a signing URL in the body; other bots don't, so the

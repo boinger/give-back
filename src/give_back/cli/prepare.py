@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import click
 
@@ -77,7 +78,7 @@ def prepare(
     # 5. Check for existing workspace and handle lifecycle
     clone_dir = Path(effective_workspace_dir).expanduser() / owner / repo_name
     old_context = read_workspace_context(clone_dir)
-    previous_issues: list[dict] = []
+    previous_issues: list[dict[str, Any]] = []
 
     if old_context is not None:
         old_issue = old_context.get("issue_number")

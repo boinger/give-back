@@ -17,10 +17,14 @@ step has independent rollback. Full design context lives in
       the TODOS.md prediction; codebase moved between 2026-04-25 and
       2026-05-07): `output/check.py`, `calibrate.py` (×2), `audit.py`,
       `cli/discover.py`.
-- [ ] **Step 2a** — Enable `disallow_any_generics`. First wave of
-      `[type-arg]` fixes: `state.py`, `guardrails.py`, `audit.py`.
-- [ ] **Step 2b/c** — Remaining `[type-arg]` fixes (split only if
-      single-PR diff exceeds ~250 lines).
+- [x] **Step 2** — Enabled `disallow_any_generics`. Fixed 75 `[type-arg]`
+      errors across 27 files. Single PR (no 2a/2b/2c split needed —
+      mechanical `dict` → `dict[str, Any]` substitutions, ~75-line diff
+      ignoring import additions). Hotspots matched the inventory:
+      `state.py` (10), `output/audit.py` / `github_client.py` /
+      `audit_mine.py` (6 each). Strategy: precise types where obvious
+      (e.g. `list[GuardrailResult]`, `list[SignalResult]`,
+      `list[AuditItem]`); `dict[str, Any]` for JSON-shaped data.
 - [ ] **Step 3** — Enable `warn_return_any`. Fixes 11 `[no-any-return]`.
 - [ ] **Step 4** — Probe with `uv run mypy src/ --strict`; fix any new
       error codes that surface; replace the four flags with

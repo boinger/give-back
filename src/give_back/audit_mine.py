@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 import click
 from rich.console import Console
@@ -16,13 +17,13 @@ from give_back.state import save_audit_result
 _DEFAULT_LIMIT = 20
 
 
-def fetch_user_repos(client: GitHubClient, *, include_all: bool = False) -> list[dict]:
+def fetch_user_repos(client: GitHubClient, *, include_all: bool = False) -> list[dict[str, Any]]:
     """Fetch the authenticated user's repos, sorted by most recent push.
 
     By default, returns only public, non-archived, non-fork repos.
     With *include_all*, returns everything.
     """
-    repos: list[dict] = []
+    repos: list[dict[str, Any]] = []
     page = 1
     per_page = 100
 
@@ -43,12 +44,12 @@ def fetch_user_repos(client: GitHubClient, *, include_all: bool = False) -> list
 
 def run_batch_audit(
     client: GitHubClient,
-    repos: list[dict],
+    repos: list[dict[str, Any]],
     *,
     limit: int = _DEFAULT_LIMIT,
-) -> list[tuple[dict, AuditReport | None, str | None]]:
+) -> list[tuple[dict[str, Any], AuditReport | None, str | None]]:
     """Run audit on up to *limit* repos. Returns list of (repo_dict, report_or_none, error_or_none)."""
-    results: list[tuple[dict, AuditReport | None, str | None]] = []
+    results: list[tuple[dict[str, Any], AuditReport | None, str | None]] = []
     to_audit = repos[:limit]
 
     for i, repo in enumerate(to_audit, 1):
@@ -76,7 +77,7 @@ def run_batch_audit(
     return results
 
 
-def print_batch_results(results: list[tuple[dict, AuditReport | None, str | None]]) -> None:
+def print_batch_results(results: list[tuple[dict[str, Any], AuditReport | None, str | None]]) -> None:
     """Display a ranked table of audit results."""
     console = Console()
     console.print()

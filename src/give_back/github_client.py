@@ -74,7 +74,7 @@ class GitHubClient:
         self._search_remaining: int | None = None
         self._search_reset: int | None = None
 
-    def graphql(self, query: str, variables: dict | None = None) -> dict:
+    def graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute a GraphQL query. Returns the 'data' dict.
 
         Raises:
@@ -103,7 +103,7 @@ class GitHubClient:
 
         return data
 
-    def rest_get(self, path: str, params: dict | None = None) -> dict:
+    def rest_get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """GET a REST API endpoint. Returns parsed JSON.
 
         Raises:
@@ -114,7 +114,7 @@ class GitHubClient:
         response = self._request_with_retry("GET", path, params=params)
         return response.json()
 
-    def rest_post(self, path: str, json: dict | None = None) -> dict:
+    def rest_post(self, path: str, json: dict[str, Any] | None = None) -> dict[str, Any]:
         """POST to a REST API endpoint. Returns parsed JSON.
 
         Raises:
@@ -124,7 +124,7 @@ class GitHubClient:
         response = self._request_with_retry("POST", path, json=json)
         return response.json()
 
-    def search(self, query: str) -> dict:
+    def search(self, query: str) -> dict[str, Any]:
         """Execute a search API query. Returns parsed JSON.
 
         Uses the separate search rate limit tracking (30 req/min).
@@ -134,7 +134,7 @@ class GitHubClient:
         self._update_search_rate_limit(response)
         return response.json()
 
-    def search_repos(self, query: str, per_page: int = 30, sort: str = "stars") -> dict:
+    def search_repos(self, query: str, per_page: int = 30, sort: str = "stars") -> dict[str, Any]:
         """Search the repositories endpoint. Returns parsed JSON.
 
         Uses the separate search rate limit tracking (30 req/min).
@@ -157,7 +157,7 @@ class GitHubClient:
         """Current core API rate-limit remaining, or None if unknown."""
         return self._rate_remaining
 
-    def check_rate_limit(self) -> dict:
+    def check_rate_limit(self) -> dict[str, Any]:
         """Return current rate limit status from the API."""
         response = self._client.get("/rate_limit")
         return response.json()

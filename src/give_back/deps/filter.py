@@ -11,7 +11,7 @@ Filters are applied in order:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -119,7 +119,7 @@ def filter_candidates(
     primary_owner: str,
     skip_list: list[str],
     client: GitHubClient | None = None,
-) -> tuple[list[tuple[str, str]], dict]:
+) -> tuple[list[tuple[str, str]], dict[str, Any]]:
     """Filter dependency candidates, returning survivors and statistics.
 
     Args:
@@ -132,7 +132,7 @@ def filter_candidates(
         ``(filtered, stats)`` where *filtered* is a list of ``(package_name, "owner/repo")``
         tuples that passed all filters, and *stats* is a dict with counts per filter.
     """
-    stats: dict = {
+    stats: dict[str, Any] = {
         "unresolved": 0,
         "stdlib": 0,
         "same_org": 0,

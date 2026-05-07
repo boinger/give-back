@@ -38,13 +38,14 @@ dev = [
 
 [tool.mypy]
 # Strict-mode ratchet in progress (see plans/PLAN-mypy-2-and-strict-ratchet.md).
-# Step 1 (this PR): disallow_untyped_defs. Steps 2-3 layer disallow_any_generics
-# and warn_return_any; Step 4 flips strict = true and removes the explicit flags.
+# Steps 1-2 landed: disallow_untyped_defs + disallow_any_generics.
+# Step 3 layers warn_return_any; Step 4 flips strict = true and removes the explicit flags.
 python_version = "3.11"
 files = ["src/"]
 exclude = ["src/give_back/_version.py"]
 warn_unused_ignores = true
 disallow_untyped_defs = true
+disallow_any_generics = true
 
 [tool.ruff]
 line-length = 120

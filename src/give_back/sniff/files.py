@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from typing import Any
 from urllib.parse import quote
 
 from give_back.exceptions import RepoNotFoundError
@@ -82,7 +83,7 @@ def _is_url(path: str) -> bool:
     return path.startswith(("http://", "https://", "ftp://"))
 
 
-def identify_files(issue_body: str, comments: list[dict]) -> list[str]:
+def identify_files(issue_body: str, comments: list[dict[str, Any]]) -> list[str]:
     """Extract file paths from issue body and comment bodies.
 
     Parses for:

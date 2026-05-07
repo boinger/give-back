@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 from rich.progress import Progress
 
@@ -51,7 +52,7 @@ class WalkResult:
     primary_repo: str
     ecosystem: str  # "python", "go", "rust", "node", or "ruby"
     results: list[DepResult] = field(default_factory=list)
-    filter_stats: dict = field(default_factory=dict)
+    filter_stats: dict[str, Any] = field(default_factory=dict)
     total_packages: int = 0  # before filtering
     resolved_count: int = 0  # successfully resolved to GitHub
 
@@ -249,7 +250,7 @@ def _try_fetch_file(client: GitHubClient, owner: str, repo: str, path: str) -> s
     return None
 
 
-def _assessment_from_cache(owner: str, repo: str, cached: dict) -> Assessment:
+def _assessment_from_cache(owner: str, repo: str, cached: dict[str, Any]) -> Assessment:
     """Build a minimal Assessment from cached state data."""
     from give_back.models import SignalResult, Tier
 

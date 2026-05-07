@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -72,7 +73,7 @@ class ResolveAction(Enum):
 class ResolveResult:
     action: ResolveAction
     message: str
-    archived_entry: dict | None = None
+    archived_entry: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +81,7 @@ class ResolveResult:
 # ---------------------------------------------------------------------------
 
 
-def read_workspace_context(workspace_dir: Path) -> dict | None:
+def read_workspace_context(workspace_dir: Path) -> dict[str, Any] | None:
     """Read .give-back/context.json from a workspace directory.
 
     Returns the parsed dict, or None if the file doesn't exist or is invalid.
@@ -212,7 +213,7 @@ def find_pr_for_branch(
 
 def resolve_old_workspace(
     clone_dir: Path,
-    old_context: dict,
+    old_context: dict[str, Any],
     client: GitHubClient | None = None,
     fork_owner: str | None = None,
 ) -> ResolveResult:
@@ -282,7 +283,7 @@ def resolve_old_workspace(
     )
 
 
-def archive_current_issue(context: dict, status: str, pr_url: str | None) -> dict:
+def archive_current_issue(context: dict[str, Any], status: str, pr_url: str | None) -> dict[str, Any]:
     """Create an archive entry for the current issue.
 
     Returns the entry dict (for appending to previous_issues).

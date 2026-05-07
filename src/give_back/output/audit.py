@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from typing import Any
 
 from rich.table import Table
 
-from give_back.audit import AuditReport
+from give_back.audit import AuditItem, AuditReport
 from give_back.output._shared import _console
 
 _CATEGORY_HEADERS = {
@@ -21,7 +22,7 @@ _CATEGORY_HEADERS = {
 _CATEGORY_ORDER = ["community_health", "templates", "labels", "signals", "conventions"]
 
 
-def print_audit(report: AuditReport, verbose: bool = False, previous: dict | None = None) -> None:
+def print_audit(report: AuditReport, verbose: bool = False, previous: dict[str, Any] | None = None) -> None:
     """Print audit results as a checklist, with optional delta from *previous*."""
     _console.print()
     _console.print(f"  Audit: [bold]{report.owner}/{report.repo}[/bold]")
@@ -30,7 +31,7 @@ def print_audit(report: AuditReport, verbose: bool = False, previous: dict | Non
     _console.print()
 
     # Group items by category
-    by_category: dict[str, list] = {}
+    by_category: dict[str, list[AuditItem]] = {}
     for item in report.items:
         by_category.setdefault(item.category, []).append(item)
 
@@ -82,7 +83,7 @@ def _format_audit_date(iso_timestamp: str) -> str:
         return "unknown date"
 
 
-def _compute_delta(report: AuditReport, previous: dict) -> dict:
+def _compute_delta(report: AuditReport, previous: dict[str, Any]) -> dict[str, Any]:
     """Compute the delta between a current report and a previous snapshot.
 
     Returns a dict with keys: prev_passing, prev_total, newly_passing,
@@ -109,7 +110,7 @@ def _compute_delta(report: AuditReport, previous: dict) -> dict:
     }
 
 
-def _print_delta(report: AuditReport, previous: dict) -> None:
+def _print_delta(report: AuditReport, previous: dict[str, Any]) -> None:
     """Print the delta between the current report and the previous snapshot."""
     delta = _compute_delta(report, previous)
     ts = previous.get("timestamp", "")
@@ -199,9 +200,9 @@ def print_audit_comparison(report_a: AuditReport, report_b: AuditReport) -> None
     _console.print()
 
 
-def print_audit_json(report: AuditReport, previous: dict | None = None) -> None:
+def print_audit_json(report: AuditReport, previous: dict[str, Any] | None = None) -> None:
     """Print audit results as JSON to stdout."""
-    data: dict = {
+    data: dict[str, Any] = {
         "owner": report.owner,
         "repo": report.repo,
         "health_percentage": report.health_percentage,

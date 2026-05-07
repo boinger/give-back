@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 from give_back.conventions.models import StyleInfo
 
@@ -58,13 +59,13 @@ def _detect_linter(clone_dir: Path) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _ruff_format_enabled(data: dict, is_pyproject: bool) -> bool:
+def _ruff_format_enabled(data: dict[str, Any], is_pyproject: bool) -> bool:
     """Return True if the TOML config enables `ruff format`."""
     ruff_section = data.get("tool", {}).get("ruff", {}) if is_pyproject else data
     return "format" in ruff_section
 
 
-def _line_length_from_section(section: dict) -> int | None:
+def _line_length_from_section(section: dict[str, Any]) -> int | None:
     """Read line-length from a TOML section, accepting either hyphen or underscore."""
     for key in ("line-length", "line_length"):
         if key in section:
@@ -72,7 +73,7 @@ def _line_length_from_section(section: dict) -> int | None:
     return None
 
 
-def _line_length_from_pyproject(data: dict) -> int | None:
+def _line_length_from_pyproject(data: dict[str, Any]) -> int | None:
     """Read line-length from `[tool.ruff]` or `[tool.black]` in pyproject.toml."""
     tool = data.get("tool", {})
     for section_name in ("ruff", "black"):

@@ -11,6 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -63,13 +64,13 @@ class ArchivedContribution:
 _PR_URL_RE = re.compile(r"https://github\.com/[^/]+/[^/]+/pull/(\d+)$")
 
 
-def scan_workspaces(workspace_dir: Path) -> list[tuple[Path, dict]]:
+def scan_workspaces(workspace_dir: Path) -> list[tuple[Path, dict[str, Any]]]:
     """Glob workspace_dir/*/*/.give-back/context.json and parse each.
 
     Returns a list of (workspace_path, context_dict) sorted by path.
     Skips corrupt JSON with a warning to stderr.
     """
-    results: list[tuple[Path, dict]] = []
+    results: list[tuple[Path, dict[str, Any]]] = []
     if not workspace_dir.is_dir():
         return results
 
@@ -119,7 +120,7 @@ def _refresh_pr_state(client: GitHubClient, owner: str, repo: str, pr_number: in
     return pr_state, review_state
 
 
-def _aggregate_review_state(reviews: list[dict]) -> str | None:
+def _aggregate_review_state(reviews: list[dict[str, Any]]) -> str | None:
     """Aggregate review verdicts: track latest state per reviewer.
 
     Only APPROVED and CHANGES_REQUESTED count. DISMISSED and COMMENTED are ignored.

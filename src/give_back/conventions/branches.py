@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import httpx
 
@@ -51,7 +52,7 @@ def analyze_branch_names(client: GitHubClient, owner: str, repo: str) -> BranchC
         return BranchConvention(pattern="unknown")
 
     # rest_get returns parsed JSON; for this endpoint it's a list.
-    prs: list[dict] = response if isinstance(response, list) else []
+    prs: list[dict[str, Any]] = response if isinstance(response, list) else []
 
     # Filter to merged PRs and extract branch names, skipping fork default branches.
     branch_names: list[str] = []

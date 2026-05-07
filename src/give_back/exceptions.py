@@ -7,6 +7,8 @@ OSError, subprocess.SubprocessError) to prevent one failure from crashing the
 pipeline. Unexpected exceptions (programmer errors) propagate for visibility.
 """
 
+from typing import Any
+
 
 class GiveBackError(Exception):
     """Base exception for all give-back errors."""
@@ -32,7 +34,7 @@ class RepoNotFoundError(GiveBackError):
 class GraphQLError(GiveBackError):
     """GraphQL response contained errors (HTTP 200 but errors key present)."""
 
-    def __init__(self, message: str, errors: list[dict] | None = None):
+    def __init__(self, message: str, errors: list[dict[str, Any]] | None = None):
         super().__init__(message)
         self.errors = errors or []
         """Raw error objects from the GraphQL response."""

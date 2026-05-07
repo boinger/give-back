@@ -10,13 +10,14 @@ import base64
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from give_back.console import stderr_console as _console
 from give_back.exceptions import GiveBackError, RateLimitError, RepoNotFoundError
 from give_back.github_client import GitHubClient
 from give_back.graphql.queries import PULL_REQUESTS_PAGE_QUERY, VIABILITY_QUERY
 from give_back.license_eval import LicenseEvaluation, evaluate_license_text
-from give_back.models import Assessment, RepoData, SignalResult, Tier
+from give_back.models import Assessment, RepoData, SignalResult, SignalWeight, Tier
 from give_back.reconcile import reconcile_merge_rate, should_reconcile
 from give_back.scoring import compute_tier
 from give_back.signals import ALL_SIGNALS
@@ -36,18 +37,18 @@ def _fetch_prs_paginated(
     owner: str,
     repo: str,
     verbose: bool,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch PRs with cursor-based pagination, stopping at the 12-month boundary.
 
     Uses ``last: 50`` (newest first) and pages backwards in time via ``before`` cursor.
     Stops when: all PRs on a page are older than the signal window, or max pages reached.
     """
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_MONTHS_WINDOW * 30)
-    all_prs: list[dict] = []
+    all_prs: list[dict[str, Any]] = []
     cursor: str | None = None
 
     for page in range(_MAX_PR_PAGES):
-        variables: dict = {"owner": owner, "repo": repo}
+        variables: dict[str, Any] = {"owner": owner, "repo": repo}
         if cursor:
             variables["cursor"] = cursor
 
@@ -199,7 +200,7 @@ def evaluate_signals(data: RepoData, client: GitHubClient, verbose: bool = False
     and use the ``RepoData`` for both signal evaluation and their own checks.
     """
     # Evaluate signals
-    signal_results: list[tuple] = []
+    signal_results: list[tuple[SignalWeight, SignalResult | None]] = []
     successful_results: list[SignalResult] = []
 
     for signal_def in ALL_SIGNALS:

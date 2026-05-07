@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 
 class Tier(Enum):
@@ -44,7 +44,7 @@ class SignalResult:
     summary: str
     """One-line human-readable finding, e.g. '82% of external PRs merged'."""
 
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     """Raw data for --verbose and --json output."""
 
     low_sample: bool = False
@@ -77,16 +77,16 @@ class RepoData:
 
     owner: str
     repo: str
-    graphql: dict
+    graphql: dict[str, Any]
     """Raw GraphQL response from the main viability query."""
 
-    community: dict
+    community: dict[str, Any]
     """REST community profile response."""
 
     contributing_text: str | None
     """CONTRIBUTING.md content (None if no file found)."""
 
-    search: dict
+    search: dict[str, Any]
     """REST search results (AI policy keywords). Empty dict if search was skipped."""
 
 

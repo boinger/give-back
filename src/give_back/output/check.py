@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from give_back.conventions.models import ContributionBrief
 from give_back.output._shared import _console
 
+if TYPE_CHECKING:
+    from give_back.guardrails import GuardrailResult
+
 
 def print_check_results(
-    results: list,
+    results: list[GuardrailResult],
     owner: str,
     repo: str,
     issue_number: int | None,

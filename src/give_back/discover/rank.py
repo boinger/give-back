@@ -8,6 +8,7 @@ proves unreliable, add calibrate-discover using the same pattern as calibrate.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 # Initial weights — expect tuning after real-world usage.
 # GitHub search doesn't return per-label issue counts, so GFI/HW bonuses
@@ -21,7 +22,7 @@ _ACTIVE_ISSUES = 5  # open_issues > 10
 _HAS_TOPICS = 3  # 3+ topics (indicates maintained repo)
 
 
-def rank_repos(repos: list[dict]) -> list[dict]:
+def rank_repos(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Score and sort search results by contribution-friendliness.
 
     Input: list of GitHub search API repo dicts.
@@ -34,7 +35,7 @@ def rank_repos(repos: list[dict]) -> list[dict]:
     return sorted(repos, key=lambda r: (r["_rank_score"], r.get("stargazers_count", 0)), reverse=True)
 
 
-def _score(repo: dict) -> int:
+def _score(repo: dict[str, Any]) -> int:
     """Compute a contribution-friendliness score from search metadata.
 
     GitHub's search API doesn't return per-label issue counts in the response.

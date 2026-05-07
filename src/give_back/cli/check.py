@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 import click
 
@@ -17,6 +18,9 @@ from give_back.exceptions import (
 from give_back.github_client import GitHubClient
 from give_back.output import print_check_results
 from give_back.state import atomic_write_text
+
+if TYPE_CHECKING:
+    from give_back.guardrails import GuardrailResult
 
 
 @click.command()
@@ -132,7 +136,7 @@ def check(verbose: bool, acknowledge: str | None) -> None:
             pass
 
     # 4. Run guardrails
-    results: list = []
+    results: list[GuardrailResult] = []
 
     results.append(check_staged_files_clean(staged_files))
     results.append(check_cla_signed(cla_info, acknowledged=cla_acknowledged))

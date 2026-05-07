@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from give_back.conventions.models import CLAInfo
 from give_back.exceptions import GiveBackError
@@ -33,7 +34,7 @@ class GuardrailResult:
     severity: Severity
     passed: bool
     message: str
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

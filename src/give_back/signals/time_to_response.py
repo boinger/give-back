@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import statistics
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from give_back.models import RepoData, SignalResult, SignalWeight, score_to_tier
 from give_back.signals._bots import is_bot as _is_bot
@@ -50,7 +51,7 @@ def _parse_dt(iso_str: str) -> datetime:
     return datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
 
 
-def _find_first_maintainer_response(pr: dict) -> datetime | None:
+def _find_first_maintainer_response(pr: dict[str, Any]) -> datetime | None:
     """Find the earliest maintainer comment or review on a PR.
 
     Scans comments for the first from MEMBER/OWNER/COLLABORATOR, and checks

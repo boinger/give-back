@@ -6,6 +6,8 @@ size, test coverage, churn, and nesting depth. No LLM — pure heuristics.
 
 from __future__ import annotations
 
+from typing import Any
+
 from give_back.github_client import GitHubClient
 from give_back.sniff.files import (
     check_test_file,
@@ -151,7 +153,7 @@ def assess_issue(
     # Fetch comments. /issues/{N}/comments returns a JSON array, but rest_get
     # is typed as -> dict for the common case; narrow to list here.
     raw_comments = client.rest_get(f"/repos/{owner}/{repo}/issues/{issue_number}/comments")
-    comments_data: list[dict] = raw_comments if isinstance(raw_comments, list) else []
+    comments_data: list[dict[str, Any]] = raw_comments if isinstance(raw_comments, list) else []
 
     # Identify referenced files
     file_paths = identify_files(issue_body, comments_data)

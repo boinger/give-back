@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from give_back._timeouts import NETWORK_SUBPROCESS_TIMEOUT
 from give_back.exceptions import SubmitError
@@ -41,7 +42,7 @@ class SubmitResult:
         return self.pr_url is not None
 
 
-def _read_context(workspace_dir: Path) -> dict:
+def _read_context(workspace_dir: Path) -> dict[str, Any]:
     """Read and validate .give-back/context.json."""
     context_file = workspace_dir / ".give-back" / "context.json"
     if not context_file.exists():
@@ -102,7 +103,7 @@ def _check_gh_auth() -> None:
         raise SubmitError("gh CLI not authenticated. Run `gh auth login`")
 
 
-def _build_pr_title(ctx: dict) -> str:
+def _build_pr_title(ctx: dict[str, Any]) -> str:
     """Generate a PR title from context metadata."""
     branch = ctx["branch_name"]
     # Strip common prefixes
@@ -114,7 +115,7 @@ def _build_pr_title(ctx: dict) -> str:
     return slug
 
 
-def _build_pr_body(ctx: dict, workspace_dir: Path) -> str:
+def _build_pr_body(ctx: dict[str, Any], workspace_dir: Path) -> str:
     """Build PR body from the brief's PR Template section."""
     brief_path = workspace_dir / ".give-back" / "brief.md"
     template_body = ""

@@ -19,6 +19,7 @@ import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from give_back.assess import run_assessment
 from give_back.console import stderr_console as _console
@@ -137,7 +138,7 @@ def _build_query(
     return " ".join(parts)
 
 
-def _repo_dict_to_result(repo: dict) -> DiscoverResult:
+def _repo_dict_to_result(repo: dict[str, Any]) -> DiscoverResult:
     """Convert a GitHub search API repo dict to a DiscoverResult."""
     full_name = repo.get("full_name", "/")
     owner, _, name = full_name.partition("/")
@@ -267,7 +268,7 @@ def discover_repos(
     query_hash = hashlib.sha256(q1.encode()).hexdigest()[:16]
 
     # Step 3: Check discover cache
-    repos: list[dict] = []
+    repos: list[dict[str, Any]] = []
     used_cache = False
     if not no_cache:
         cached = get_discover_cache(query_hash)
@@ -369,7 +370,7 @@ def discover_repos(
         fallback_hash = hashlib.sha256(q_fallback.encode()).hexdigest()[:16]
 
         # 13c-13d: Check fallback cache or search
-        fb_repos: list[dict] = []
+        fb_repos: list[dict[str, Any]] = []
         fb_used_cache = False
         if not no_cache:
             fb_cached = get_discover_cache(fallback_hash)

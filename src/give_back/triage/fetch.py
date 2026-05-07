@@ -8,6 +8,7 @@ heuristics.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from give_back.github_client import GitHubClient
 from give_back.triage.models import Clarity, Competition, IssueCandidate, Scope
@@ -88,7 +89,7 @@ def fetch_issues(
 
 
 def _issue_to_candidate(
-    issue: dict,
+    issue: dict[str, Any],
     owner: str,
     repo: str,
     now: datetime,

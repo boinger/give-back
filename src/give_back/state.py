@@ -11,6 +11,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from give_back.exceptions import StateCorruptError
 from give_back.models import Assessment, Config, SignalResult, Tier
@@ -53,11 +54,11 @@ _MAX_AUDIT_HISTORY = 5
 _MAX_CACHE_ENTRIES_PER_SECTION = 50
 
 
-def _empty_state() -> dict:
+def _empty_state() -> dict[str, Any]:
     return {"version": _SCHEMA_VERSION, "assessments": {}, "skip_list": [], "audit_results": {}}
 
 
-def load_state() -> dict:
+def load_state() -> dict[str, Any]:
     """Load state file. Returns empty state if file doesn't exist.
 
     Raises StateCorruptError if file exists but is invalid, after backing up.
@@ -90,7 +91,7 @@ def _entry_timestamp(entry: object) -> str | None:
     return ts if isinstance(ts, str) and ts else None
 
 
-def _prune_expired_cache_sections(state: dict) -> None:
+def _prune_expired_cache_sections(state: dict[str, Any]) -> None:
     """Sweep ``assessments`` and ``discover_cache`` in-place.
 
     Two layers:
@@ -152,7 +153,7 @@ def _prune_expired_cache_sections(state: dict) -> None:
                 del section[key]
 
 
-def save_state(state: dict) -> None:
+def save_state(state: dict[str, Any]) -> None:
     """Save state to disk atomically (write to temp, then rename).
 
     Silently creates ~/.give-back/ if it doesn't exist. Prunes expired
@@ -197,7 +198,9 @@ def save_assessment(assessment: Assessment, signal_names: list[str] | None = Non
     save_state(state)
 
 
-def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS) -> dict | None:
+def get_cached_assessment(
+    owner: str, repo: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS
+) -> dict[str, Any] | None:
     """Return cached assessment if fresh enough, else None."""
     try:
         state = load_state()
@@ -222,7 +225,7 @@ def get_cached_assessment(owner: str, repo: str, max_age_hours: int = _DEFAULT_C
     return entry
 
 
-def reconstruct_assessment(cached: dict, owner: str, repo: str) -> tuple[Assessment, list[str]]:
+def reconstruct_assessment(cached: dict[str, Any], owner: str, repo: str) -> tuple[Assessment, list[str]]:
     """Rebuild an Assessment and signal names from the cached JSON format.
 
     Returns ``(assessment, signal_names)`` where *signal_names* are the names
@@ -300,7 +303,7 @@ def get_skip_list() -> list[str]:
     return state.get("skip_list", [])
 
 
-def save_audit_result(owner: str, repo: str, snapshot: dict) -> None:
+def save_audit_result(owner: str, repo: str, snapshot: dict[str, Any]) -> None:
     """Append an audit snapshot to the capped history for *owner/repo*.
 
     *snapshot* is a plain dict with at least ``timestamp`` and ``items`` keys.
@@ -327,7 +330,7 @@ def save_audit_result(owner: str, repo: str, snapshot: dict) -> None:
     save_state(state)
 
 
-def get_previous_audit(owner: str, repo: str) -> dict | None:
+def get_previous_audit(owner: str, repo: str) -> dict[str, Any] | None:
     """Return the most recent stored audit snapshot for *owner/repo*, or None."""
     try:
         state = load_state()
@@ -354,7 +357,7 @@ def get_previous_audit(owner: str, repo: str) -> dict | None:
     return entry
 
 
-def save_discover_cache(query_hash: str, query: str, repos: list[dict]) -> None:
+def save_discover_cache(query_hash: str, query: str, repos: list[dict[str, Any]]) -> None:
     """Save search results to discover cache, keyed by query hash."""
     try:
         state = load_state()
@@ -370,7 +373,7 @@ def save_discover_cache(query_hash: str, query: str, repos: list[dict]) -> None:
     save_state(state)
 
 
-def get_discover_cache(query_hash: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS) -> dict | None:
+def get_discover_cache(query_hash: str, max_age_hours: int = _DEFAULT_CACHE_TTL_HOURS) -> dict[str, Any] | None:
     """Return cached search results if fresh, else None."""
     try:
         state = load_state()

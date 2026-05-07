@@ -8,6 +8,7 @@ failing item. Runs entirely via API (no clone required unless --conventions).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -16,7 +17,7 @@ from give_back.conventions.brief import scan_conventions
 from give_back.conventions.models import ContributionBrief
 from give_back.exceptions import GiveBackError, RepoNotFoundError
 from give_back.github_client import GitHubClient
-from give_back.models import RepoData, Tier
+from give_back.models import RepoData, SignalResult, Tier
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -40,7 +41,7 @@ class AuditItem:
     recommendation: str | None = None
     """What to do if failing (None if passing)."""
 
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
     """Optional structured data for fix handlers (e.g. missing label names)."""
 
 
@@ -78,7 +79,9 @@ _COMMUNITY_CHECKS: list[tuple[str, str, str, str]] = [
 ]
 
 
-def _check_community_file(community: dict, name: str, files_key: str, pass_msg: str, recommendation: str) -> AuditItem:
+def _check_community_file(
+    community: dict[str, Any], name: str, files_key: str, pass_msg: str, recommendation: str
+) -> AuditItem:
     """Check whether a community health file exists."""
     file_info = community.get("files", {}).get(files_key)
     if file_info is not None:
@@ -230,7 +233,7 @@ _SIGNAL_RECOMMENDATIONS: dict[str, str] = {
 _SIGNAL_PASS_THRESHOLD = 0.6
 
 
-def _wrap_signals(assessment_signals: list, signal_names: list[str]) -> list[AuditItem]:
+def _wrap_signals(assessment_signals: list[SignalResult], signal_names: list[str]) -> list[AuditItem]:
     """Convert signal results to AuditItems with maintainer-facing recommendations."""
     items: list[AuditItem] = []
     for name, result in zip(signal_names, assessment_signals):
