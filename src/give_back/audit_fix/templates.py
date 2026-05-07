@@ -287,7 +287,7 @@ def confirm_with_preview(content: str, label: str) -> bool:
         if choice == "p":
             preview_content(content, label)
             continue
-        return choice == "w"
+        return bool(choice == "w")
 
 
 def write_file(path: Path, content: str) -> None:

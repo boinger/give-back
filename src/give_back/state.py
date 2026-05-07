@@ -11,7 +11,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from give_back.exceptions import StateCorruptError
 from give_back.models import Assessment, Config, SignalResult, Tier
@@ -222,7 +222,7 @@ def get_cached_assessment(
     except (KeyError, ValueError):
         return None
 
-    return entry
+    return cast(dict[str, Any], entry)
 
 
 def reconstruct_assessment(cached: dict[str, Any], owner: str, repo: str) -> tuple[Assessment, list[str]]:
@@ -300,7 +300,7 @@ def get_skip_list() -> list[str]:
     except StateCorruptError:
         return []
 
-    return state.get("skip_list", [])
+    return cast(list[str], state.get("skip_list", []))
 
 
 def save_audit_result(owner: str, repo: str, snapshot: dict[str, Any]) -> None:
@@ -393,7 +393,7 @@ def get_discover_cache(query_hash: str, max_age_hours: int = _DEFAULT_CACHE_TTL_
     except (ValueError, TypeError):
         return None
 
-    return entry
+    return cast(dict[str, Any], entry)
 
 
 def _backup_corrupt_state() -> None:

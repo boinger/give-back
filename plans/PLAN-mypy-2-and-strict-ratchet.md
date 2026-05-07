@@ -25,7 +25,12 @@ step has independent rollback. Full design context lives in
       `audit_mine.py` (6 each). Strategy: precise types where obvious
       (e.g. `list[GuardrailResult]`, `list[SignalResult]`,
       `list[AuditItem]`); `dict[str, Any]` for JSON-shaped data.
-- [ ] **Step 3** — Enable `warn_return_any`. Fixes 11 `[no-any-return]`.
+- [x] **Step 3** — Enabled `warn_return_any`. Fixed 11 `[no-any-return]`
+      errors (count matched TODOS.md exactly): 6 in `github_client.py`
+      (httpx `response.json()` returns), 3 in `state.py` (`dict.get`
+      results), 1 in `prepare/lifecycle.py` (`json.loads`), 1 in
+      `audit_fix/templates.py` (click prompt). Pattern: `cast(...)` for
+      JSON-shaped returns, `bool(...)` wrap for the click case.
 - [ ] **Step 4** — Probe with `uv run mypy src/ --strict`; fix any new
       error codes that surface; replace the four flags with
       `strict = true`. Remove the strict-ratchet item from `TODOS.md`

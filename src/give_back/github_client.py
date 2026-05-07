@@ -23,7 +23,7 @@ Retry/throttle flow:
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -95,7 +95,7 @@ class GitHubClient:
             messages = [e.get("message", "Unknown error") for e in body["errors"]]
             raise GraphQLError(f"GraphQL errors: {'; '.join(messages)}", errors=body["errors"])
 
-        data = body.get("data", {})
+        data: dict[str, Any] = body.get("data", {})
 
         # Check for null repository (repo not found or private)
         if "repository" in data and data["repository"] is None:
@@ -112,7 +112,7 @@ class GitHubClient:
             RateLimitError: On 403 with rate limit headers.
         """
         response = self._request_with_retry("GET", path, params=params)
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def rest_post(self, path: str, json: dict[str, Any] | None = None) -> dict[str, Any]:
         """POST to a REST API endpoint. Returns parsed JSON.
@@ -122,7 +122,7 @@ class GitHubClient:
             RateLimitError: On 403 with rate limit headers.
         """
         response = self._request_with_retry("POST", path, json=json)
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def search(self, query: str) -> dict[str, Any]:
         """Execute a search API query. Returns parsed JSON.
@@ -132,7 +132,7 @@ class GitHubClient:
         self._check_search_rate_limit()
         response = self._request_with_retry("GET", "/search/issues", params={"q": query, "per_page": 10})
         self._update_search_rate_limit(response)
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def search_repos(self, query: str, per_page: int = 30, sort: str = "stars") -> dict[str, Any]:
         """Search the repositories endpoint. Returns parsed JSON.
@@ -144,7 +144,7 @@ class GitHubClient:
             "GET", "/search/repositories", params={"q": query, "per_page": per_page, "sort": sort}
         )
         self._update_search_rate_limit(response)
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def has_rate_budget(self, calls: int) -> bool:
         """Check if enough core API budget remains for *calls* requests."""
@@ -160,7 +160,7 @@ class GitHubClient:
     def check_rate_limit(self) -> dict[str, Any]:
         """Return current rate limit status from the API."""
         response = self._client.get("/rate_limit")
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

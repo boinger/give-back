@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -90,7 +90,7 @@ def read_workspace_context(workspace_dir: Path) -> dict[str, Any] | None:
     if not context_file.exists():
         return None
     try:
-        return json.loads(context_file.read_text())
+        return cast(dict[str, Any], json.loads(context_file.read_text()))
     except (json.JSONDecodeError, OSError):
         return None
 
