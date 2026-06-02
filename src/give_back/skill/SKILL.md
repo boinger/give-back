@@ -156,7 +156,8 @@ give-back conventions <owner/repo> --issue <number>
 Summarize the key conventions the user needs to follow:
 
 - Commit message format (conventional commits? imperative mood?)
-- Whether DCO sign-off is required (`git commit -s`)
+- Whether DCO sign-off is required (`git commit -s`) — a `Signed-off-by` trailer
+- Whether **signed commit signatures** are required (the SSH/GPG "Verified" badge) — a *different* requirement from DCO sign-off; check CONTRIBUTING / branch-protection language. Record as **"may require"**, because the merge strategy (next line) modulates it: squash/rebase-merge repos mint a fresh GitHub-signed commit at merge, so unsigned PR-branch commits may not block there — but merge-commit repos (and some squash configs, e.g. grafana/loki, which blocked PRs until the branch commits were signed) require the branch commits themselves to be signed. Don't assert "required" from docs alone; treat it as a flag to confirm against an actual block.
 - Merge strategy (squash, rebase, merge)
 - PR template sections to fill out
 - PR template checklist handling (see below)
@@ -211,6 +212,28 @@ run `open <url>`. This is purely advisory — prepare does NOT write any
 acknowledgment marker. After the user signs, they confirm with
 `give-back check --ack cla`.
 
+**Signing readiness (advisory, like the CLA prompt).** Commits in give-back
+workspaces are SSH-signed by default — an `includeIf` scopes signing to
+`~/Projects/give-back-workspaces/` (or wherever workspaces live). More orgs now
+*require* signed commits (grafana turned it on org-wide), so verify the workspace
+will produce *verifiable* commits, or a signed PR can still land "Unverified":
+```bash
+git -C <workspace> config --get commit.gpgsign            # expect: true
+gh api user/ssh_signing_keys --jq '.[].title' 2>/dev/null  # expect: a signing-key entry (read:ssh_signing_key)
+```
+- `commit.gpgsign` not `true` → the includeIf signing scope is missing for this
+  path; set it up so new commits sign automatically.
+- No signing key registered → commits will sign locally but show **Unverified**
+  (signature ≠ registration). Register the key (a setup fix, not a rebase):
+  ```bash
+  gh ssh-key add ~/.ssh/<key>.pub --type signing --title "<name> (signing)"
+  #   404 on scope → GITHUB_TOKEN= gh auth refresh -h github.com -s admin:ssh_signing_key  (then retry; clear GITHUB_TOKEN if an env token shadows the OAuth one)
+  #   or web UI: https://github.com/settings/ssh/new  (Key type = Signing Key)
+  ```
+Surface this; don't block. If the repo's conventions flagged signed commits as
+"may require," call it out here so the contributor signs from the first commit
+rather than rewriting later (which force-pushes and can dismiss approvals).
+
 Tell the user:
 
 1. Where the workspace was created
@@ -238,6 +261,25 @@ cd <workspace_path> && give-back check --verbose
 Interpret the results. Any BLOCK severity means the user needs to fix
 something before submitting. WARN items are worth addressing but won't
 prevent submission.
+
+**Signing pre-flight:** if the repo's conventions flagged signed commits as
+"may require," confirm the branch commits will verify before submission —
+`gh api repos/<your_fork>/commits/<HEAD_sha> --jq '.commit.verification.reason'`
+should read `valid` (query the **fork**, not upstream — the base repo can 404
+until ref propagation; and don't use local `git verify-commit`/`%G?`, which
+false-fail without `gpg.ssh.allowedSignersFile`). If it reads `unsigned`, the
+includeIf scope likely wasn't active when the commits were made — re-sign before
+submitting (cheaper now than after a maintainer asks, which forces a post-review
+rewrite):
+```bash
+# single commit (the common freshly-cut-PR case):
+git commit --amend -S --no-edit
+# several commits:
+git rebase -S -f <base>   # -f is REQUIRED — a freshly-cut PR is usually 0-behind base, and a plain `rebase -S` no-ops there ("up to date") and signs nothing
+# then push (add --force-with-lease --force-if-includes if the branch was already pushed)
+```
+If it reads `unknown_key`/`not_signing_key`, the key just needs registering
+(Step 5 readiness), not a rewrite.
 
 **PR status awareness:** `check` now detects if a PR already exists for the
 current branch and updates context.json with the PR status.
