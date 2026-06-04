@@ -709,3 +709,49 @@ class TestExtractSignalDetail:
         assessment = _assessment(signals=[_signal(summary="unrelated")])
         result = _extract_signal_detail(assessment, "nonexistent", "merge_rate")
         assert result == "\u2014"
+
+
+class TestExtractSignalDetailFallbacks:
+    """Characterization tests for the non-numeric fallbacks.
+
+    Pinned before extracting the median_hours ladder into a helper — see
+    plans/PLAN-sloppylint-cleanup.md (these branches were previously uncovered).
+    """
+
+    def test_median_hours_non_numeric_falls_back_to_str(self):
+        assessment = _assessment(signals=[_signal(summary="first response time", details={"median_hours": "n/a"})])
+        result = _extract_signal_detail(assessment, "first response", "median_hours")
+        assert result == "n/a"
+
+    def test_missing_detail_falls_back_to_summary_prefix(self):
+        assessment = _assessment(signals=[_signal(summary="first response time is quite slow here", details={})])
+        result = _extract_signal_detail(assessment, "first response", "median_hours")
+        assert result == "first response time is quite slow here"[:20]
+
+
+class TestGateReviewDisplay:
+    """Characterization test for the GATE needs_human → REVIEW ladder branch.
+
+    Pinned before extracting the gate display into a helper — see
+    plans/PLAN-sloppylint-cleanup.md (this branch was previously uncovered).
+    """
+
+    def test_gate_needs_human_shows_review(self):
+        signals = [_signal(score=1.0, tier=Tier.GREEN, summary="Needs a look", details={"needs_human": True})]
+        assessment = _assessment(signals=signals)
+        output = _capture(print_assessment, assessment, ["PR policy"], [SignalWeight.GATE])
+        assert "REVIEW" in output
+        assert "PASS" not in output
+
+
+class TestBuildSummaryFallbacks:
+    """Characterization test for the no-parts YELLOW fallback.
+
+    Pinned before flattening _build_summary — see plans/PLAN-sloppylint-cleanup.md
+    (this branch was previously uncovered).
+    """
+
+    def test_yellow_tier_no_matching_signals(self):
+        assessment = _assessment(tier=Tier.YELLOW, signals=[_signal(summary="lots of stars")])
+        result = _build_summary(assessment, ["Star count"])
+        assert "mixed signals" in result

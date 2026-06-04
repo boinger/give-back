@@ -1,9 +1,10 @@
 """Tests for assess.py core assessment logic."""
 
 import logging
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from give_back.assess import run_assessment
+from give_back.assess import _fetch_prs_paginated, run_assessment
 from give_back.exceptions import GiveBackError, RateLimitError
 from give_back.models import Assessment, RepoData, SignalDef, SignalResult, SignalWeight, Tier
 
@@ -246,3 +247,87 @@ class TestIncompleteAssessment:
 
         # MEDIUM failure does not trigger incomplete
         assert result.incomplete is False
+
+
+# ---------------------------------------------------------------------------
+# _fetch_prs_paginated — characterization tests pinned before extracting the
+# page-boundary check into a helper (plans/PLAN-sloppylint-cleanup.md; the
+# boundary branch was previously uncovered).
+# ---------------------------------------------------------------------------
+
+
+def _page(nodes, has_prev=False, start_cursor=None):
+    return {
+        "repository": {
+            "pullRequests": {
+                "nodes": nodes,
+                "pageInfo": {"hasPreviousPage": has_prev, "startCursor": start_cursor},
+            }
+        }
+    }
+
+
+def _pr(created_at: str) -> dict:
+    return {"createdAt": created_at}
+
+
+def _recent_iso() -> str:
+    return (datetime.now(tz=timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class TestFetchPrsPaginatedBoundary:
+    def test_stops_at_twelve_month_boundary(self):
+        """A page whose oldest PR predates the window stops pagination despite more pages."""
+        client = MagicMock()
+        client.graphql.return_value = _page([_pr("2020-01-01T00:00:00Z")], has_prev=True, start_cursor="c1")
+
+        prs = _fetch_prs_paginated(client, "o", "r", verbose=False)
+
+        assert client.graphql.call_count == 1
+        assert len(prs) == 1
+
+    def test_boundary_stop_verbose(self):
+        """Verbose mode logs the boundary but stops identically."""
+        client = MagicMock()
+        client.graphql.return_value = _page([_pr("2020-01-01T00:00:00Z")], has_prev=True, start_cursor="c1")
+
+        prs = _fetch_prs_paginated(client, "o", "r", verbose=True)
+
+        assert client.graphql.call_count == 1
+        assert len(prs) == 1
+
+    def test_invalid_date_does_not_stop_pagination(self):
+        """An unparseable createdAt is ignored; pagination continues to the cursor logic."""
+        client = MagicMock()
+        client.graphql.side_effect = [
+            _page([_pr("not-a-date")], has_prev=True, start_cursor="c1"),
+            _page([], has_prev=False),
+        ]
+
+        prs = _fetch_prs_paginated(client, "o", "r", verbose=False)
+
+        assert client.graphql.call_count == 2
+        assert len(prs) == 1
+
+    def test_empty_page_stops(self):
+        """An empty page ends pagination, keeping previously fetched PRs."""
+        client = MagicMock()
+        client.graphql.side_effect = [
+            _page([_pr(_recent_iso())], has_prev=True, start_cursor="c1"),
+            _page([], has_prev=True, start_cursor="c2"),
+        ]
+
+        prs = _fetch_prs_paginated(client, "o", "r", verbose=False)
+
+        assert client.graphql.call_count == 2
+        assert len(prs) == 1
+
+    def test_missing_cursor_stops(self):
+        """hasPreviousPage without a startCursor ends pagination after the current page."""
+        client = MagicMock()
+        client.graphql.return_value = _page([_pr(_recent_iso())], has_prev=True, start_cursor=None)
+
+        prs = _fetch_prs_paginated(client, "o", "r", verbose=False)
+
+        assert client.graphql.call_count == 1
+        assert len(prs) == 1
