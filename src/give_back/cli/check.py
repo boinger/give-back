@@ -20,7 +20,51 @@ from give_back.output import print_check_results
 from give_back.state import atomic_write_text
 
 if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Any
+
     from give_back.guardrails import GuardrailResult
+
+
+def _detect_pr_status(
+    client: GitHubClient,
+    cwd: Path,
+    context: dict[str, Any],
+    upstream_owner: str,
+    repo_name: str,
+    branch_name: str,
+) -> GuardrailResult | None:
+    """Detect an existing PR for the branch, record its status in context.json.
+
+    Returns an INFO guardrail result describing the PR, or None when there is
+    no branch, no resolvable fork owner, or no PR.
+    """
+    from give_back.guardrails import GuardrailResult, Severity
+    from give_back.prepare.lifecycle import (
+        find_pr_for_branch,
+        parse_fork_owner_from_remote,
+        update_context_status,
+    )
+
+    if not branch_name:
+        return None
+
+    fork_owner = context.get("fork_owner") or parse_fork_owner_from_remote(cwd)
+    if not fork_owner:
+        return None
+
+    pr_info = find_pr_for_branch(client, upstream_owner, repo_name, fork_owner, branch_name)
+    if pr_info is None:
+        return None
+
+    status = "merged" if pr_info.state == "merged" else "pr_open"
+    update_context_status(cwd, status, pr_info.pr_url, pr_info.pr_number)
+    return GuardrailResult(
+        name="pr_status",
+        severity=Severity.INFO,
+        passed=True,
+        message=f"PR #{pr_info.pr_number} ({pr_info.state}): {pr_info.pr_url}",
+    )
 
 
 @click.command()
@@ -158,33 +202,9 @@ def check(verbose: bool, acknowledge: str | None) -> None:
                 results.append(check_duplicate_pr(client, upstream_owner, repo_name, issue_number))
 
                 # 5.5 PR detection — check if a PR exists for this branch
-                if branch_name:
-                    from give_back.guardrails import Severity
-                    from give_back.prepare.lifecycle import (
-                        find_pr_for_branch,
-                        parse_fork_owner_from_remote,
-                        update_context_status,
-                    )
-
-                    fork_owner = context.get("fork_owner")
-                    if not fork_owner:
-                        fork_owner = parse_fork_owner_from_remote(cwd)
-
-                    if fork_owner:
-                        pr_info = find_pr_for_branch(client, upstream_owner, repo_name, fork_owner, branch_name)
-                        if pr_info:
-                            status = "merged" if pr_info.state == "merged" else "pr_open"
-                            update_context_status(cwd, status, pr_info.pr_url, pr_info.pr_number)
-                            from give_back.guardrails import GuardrailResult
-
-                            results.append(
-                                GuardrailResult(
-                                    name="pr_status",
-                                    severity=Severity.INFO,
-                                    passed=True,
-                                    message=f"PR #{pr_info.pr_number} ({pr_info.state}): {pr_info.pr_url}",
-                                )
-                            )
+                pr_result = _detect_pr_status(client, cwd, context, upstream_owner, repo_name, branch_name)
+                if pr_result is not None:
+                    results.append(pr_result)
         except (AuthenticationError, RateLimitError, GiveBackError):
             pass  # Skip API checks if they fail
 

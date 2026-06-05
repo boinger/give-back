@@ -458,8 +458,9 @@ def _parse_config_yaml(content: str) -> Config:
             if value:
                 workspace_dir = value
             in_handoff = False
+            continue
 
-        elif stripped == "handoff:" or stripped.startswith("handoff:"):
+        if stripped == "handoff:" or stripped.startswith("handoff:"):
             after = stripped.split(":", 1)[1].strip()
             if after and after not in ("null", "~"):
                 handoff_command = after.strip("\"'")
@@ -468,15 +469,17 @@ def _parse_config_yaml(content: str) -> Config:
             else:
                 in_handoff = True
                 handoff_consumed = False
+            continue
 
-        elif in_handoff and stripped.startswith("command:"):
+        if in_handoff and stripped.startswith("command:"):
             value = stripped.split(":", 1)[1].strip().strip("\"'")
             if value and value not in ("null", "~"):
                 handoff_command = value
             in_handoff = False
             handoff_consumed = True
+            continue
 
-        elif in_handoff:
+        if in_handoff:
             # We saw "handoff:" then a line that isn't "command:". The user
             # likely got the indent or key name wrong \u2014 warn so they don't
             # silently lose their handoff.

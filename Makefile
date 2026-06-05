@@ -81,7 +81,7 @@ type-check:
 	uv run mypy src/
 
 sloppylint:
-	uv run --with sloppylint sloppylint --max-score 151 src/
+	uv run --with sloppylint sloppylint --max-score 0 src/
 
 # CI-equivalent checks. READ-ONLY — does not mutate files.
 # This target mirrors .github/workflows/ci.yml exactly. Run it before

@@ -29,6 +29,15 @@ _WEIGHT_LABELS = {
 }
 
 
+def _format_median_hours(value: float) -> str:
+    """Format a median-hours metric as minutes, hours, or days."""
+    if value < 1:
+        return f"{value * 60:.0f}m"
+    if value < 48:
+        return f"{value:.0f}h"
+    return f"{value / 24:.0f}d"
+
+
 def _extract_signal_detail(assessment: Assessment, keyword: str, detail_key: str) -> str:
     """Extract a specific metric from assessment signals for table display."""
     for signal in assessment.signals:
@@ -37,13 +46,8 @@ def _extract_signal_detail(assessment: Assessment, keyword: str, detail_key: str
             if value is not None:
                 if detail_key == "merge_rate":
                     return f"{value:.0%}" if isinstance(value, float) else str(value)
-                if detail_key == "median_hours":
-                    if isinstance(value, (int, float)):
-                        if value < 1:
-                            return f"{value * 60:.0f}m"
-                        if value < 48:
-                            return f"{value:.0f}h"
-                        return f"{value / 24:.0f}d"
+                if detail_key == "median_hours" and isinstance(value, (int, float)):
+                    return _format_median_hours(value)
                 return str(value)
 
             return signal.summary[:20] if signal.summary else "—"

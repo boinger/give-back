@@ -32,6 +32,22 @@ _MAX_PR_PAGES = 10  # 10 pages × 50 PRs = 500 PRs max
 _MONTHS_WINDOW = 12
 
 
+def _page_past_window(oldest_pr: dict[str, Any], cutoff: datetime, verbose: bool, page: int) -> bool:
+    """True if the page's oldest PR predates the signal window (stop paginating)."""
+    oldest_date_str = oldest_pr.get("createdAt") or oldest_pr.get("closedAt") or ""
+    if not oldest_date_str:
+        return False
+    try:
+        oldest_date = datetime.fromisoformat(oldest_date_str.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if oldest_date < cutoff:
+        if verbose:
+            _console.print(f"  [dim]Reached 12-month boundary at page {page + 1}[/dim]")
+        return True
+    return False
+
+
 def _fetch_prs_paginated(
     client: GitHubClient,
     owner: str,
@@ -67,17 +83,9 @@ def _fetch_prs_paginated(
         all_prs.extend(nodes)
 
         # Check if the oldest PR on this page is beyond our window
-        oldest_pr = nodes[0]  # last:50 returns oldest-first within the page
-        oldest_date_str = oldest_pr.get("createdAt") or oldest_pr.get("closedAt") or ""
-        if oldest_date_str:
-            try:
-                oldest_date = datetime.fromisoformat(oldest_date_str.replace("Z", "+00:00"))
-                if oldest_date < cutoff:
-                    if verbose:
-                        _console.print(f"  [dim]Reached 12-month boundary at page {page + 1}[/dim]")
-                    break
-            except ValueError:
-                pass
+        # (last:50 returns oldest-first within the page)
+        if _page_past_window(nodes[0], cutoff, verbose, page):
+            break
 
         # Check if there are more pages
         if not page_info.get("hasPreviousPage"):

@@ -217,6 +217,17 @@ def _assess_results(
     return assessed_count, cache_hits
 
 
+def _merge_unique(repos: list[dict[str, Any]], q2_items: list[dict[str, Any]], seen: set[str | None]) -> None:
+    """Append Q2 items not already present (by full_name), tagging their origin query."""
+    for item in q2_items:
+        name = item.get("full_name")
+        if name in seen:
+            continue
+        item["_from_hw_query"] = True
+        repos.append(item)
+        seen.add(name)
+
+
 def discover_repos(
     client: GitHubClient,
     *,
@@ -315,11 +326,7 @@ def discover_repos(
 
                 # Deduplicate by full_name
                 seen = {r.get("full_name") for r in repos}
-                for item in q2_items:
-                    if item.get("full_name") not in seen:
-                        item["_from_hw_query"] = True
-                        repos.append(item)
-                        seen.add(item.get("full_name"))
+                _merge_unique(repos, q2_items, seen)
 
     total_searched = len(repos)
 

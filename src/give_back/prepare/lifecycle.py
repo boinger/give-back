@@ -155,7 +155,10 @@ def check_old_branch_state(
         if result.returncode == 0 and result.stdout.strip():
             pushed_to_origin = True
     except (subprocess.TimeoutExpired, OSError):
-        pass  # Assume not pushed (safe — won't delete data)
+        # Leave pushed_to_origin=False: with commits ahead this resolves to
+        # BLOCK_UNPUSHED, which refuses cleanup — worst case we over-block;
+        # the deletion paths are unreachable from this default.
+        pass
 
     has_unpushed = commits_ahead > 0 and not pushed_to_origin
 

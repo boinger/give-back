@@ -18,6 +18,7 @@ from give_back.exceptions import (
     StateCorruptError,
 )
 from give_back.github_client import GitHubClient
+from give_back.models import Assessment
 from give_back.output import (
     print_assessment,
     print_assessment_json,
@@ -25,6 +26,30 @@ from give_back.output import (
 )
 from give_back.signals import ALL_SIGNALS
 from give_back.state import get_cached_assessment, save_assessment
+
+
+def _exit_for_cached_assessment(assessment: Assessment) -> None:
+    """Exit with the assess status code: 3 = gate fail (RED), 2 = incomplete, 0 = ok."""
+    if not assessment.gate_passed:
+        sys.exit(3)
+    if assessment.incomplete:
+        sys.exit(2)
+    sys.exit(0)
+
+
+def _emit_deps(client: GitHubClient, owner: str, repo_name: str, limit: int, verbose: bool, json_output: bool) -> None:
+    """Walk the project's dependencies and print the result; warn on walk failure."""
+    from give_back.deps.walker import walk_deps
+    from give_back.output import print_deps, print_deps_json
+
+    try:
+        walk_result = walk_deps(client, owner, repo_name, limit=limit, verbose=verbose)
+        if json_output:
+            print_deps_json(walk_result)
+        else:
+            print_deps(walk_result, verbose=verbose)
+    except GiveBackError as exc:
+        _console.print(f"\n[yellow]Warning:[/yellow] Dependency walking failed: {exc}")
 
 
 @click.command()
@@ -73,11 +98,7 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
                     print_assessment(assessment, signal_names, signal_weights, verbose=verbose)
 
                 if not deps:
-                    if not assessment.gate_passed:
-                        sys.exit(3)
-                    if assessment.incomplete:
-                        sys.exit(2)
-                    return
+                    _exit_for_cached_assessment(assessment)
 
                 # Fall through to deps handling below with fresh client
                 # (deps always needs API calls)
@@ -122,17 +143,7 @@ def assess(repo: str, json_output: bool, no_cache: bool, verbose: bool, deps: bo
                     )
                     sys.exit(1)
 
-                from give_back.deps.walker import walk_deps
-                from give_back.output import print_deps, print_deps_json
-
-                try:
-                    walk_result = walk_deps(client, owner, repo_name, limit=limit, verbose=verbose)
-                    if json_output:
-                        print_deps_json(walk_result)
-                    else:
-                        print_deps(walk_result, verbose=verbose)
-                except GiveBackError as exc:
-                    _console.print(f"\n[yellow]Warning:[/yellow] Dependency walking failed: {exc}")
+                _emit_deps(client, owner, repo_name, limit, verbose, json_output)
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

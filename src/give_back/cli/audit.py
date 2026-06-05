@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import click
 
@@ -23,6 +24,30 @@ from give_back.exceptions import (
     RepoNotFoundError,
 )
 from give_back.github_client import GitHubClient
+
+if TYPE_CHECKING:
+    from give_back.audit import AuditReport
+    from give_back.audit_fix.resolver import TemplateResolver
+
+
+def _run_audit_fixes(
+    report: AuditReport,
+    owner: str,
+    repo_name: str,
+    client: GitHubClient,
+    resolver: TemplateResolver,
+) -> None:
+    """Resolve the local repo dir and walk failing checks interactively."""
+    from give_back.audit_fix.fix import print_fix_summary, resolve_repo_dir, walk_fixes
+
+    repo_dir = resolve_repo_dir(owner, repo_name)
+    if repo_dir is None:
+        return
+    try:
+        summary = walk_fixes(report, repo_dir, client, resolver=resolver)
+        print_fix_summary(summary)
+    except click.Abort:
+        _console.print("\n  Interrupted.")
 
 
 @click.group(cls=DefaultGroup, default="repo", default_if_no_args=True)
@@ -201,7 +226,6 @@ def audit_fix(
     from pathlib import Path
 
     from give_back.audit import run_audit
-    from give_back.audit_fix.fix import print_fix_summary, resolve_repo_dir, walk_fixes
     from give_back.audit_fix.resolver import TemplateResolver
 
     if template_repo and template_dir:
@@ -232,13 +256,7 @@ def audit_fix(
             if not has_failures:
                 _console.print("\n  [green]Nothing to fix![/green]")
             else:
-                repo_dir = resolve_repo_dir(owner, repo_name)
-                if repo_dir is not None:
-                    try:
-                        summary = walk_fixes(report, repo_dir, client, resolver=resolver)
-                        print_fix_summary(summary)
-                    except click.Abort:
-                        _console.print("\n  Interrupted.")
+                _run_audit_fixes(report, owner, repo_name, client, resolver)
 
     except AuthenticationError as exc:
         _console.print(f"[red]Error:[/red] {exc}")

@@ -7,8 +7,17 @@ import json
 from rich.table import Table
 
 from give_back.console import stderr_console
-from give_back.models import Assessment, SignalWeight, Tier
+from give_back.models import Assessment, SignalResult, SignalWeight, Tier
 from give_back.output._shared import _TIER_COLORS, _TIER_LABELS, _WEIGHT_LABELS, _console
+
+
+def _gate_display(result: SignalResult) -> str:
+    """Tier label for a GATE signal: FAIL, REVIEW (needs a human look), or PASS."""
+    if result.score < 0:
+        return "FAIL"
+    if result.details.get("needs_human"):
+        return "REVIEW"
+    return "PASS"
 
 
 def print_assessment(
@@ -52,12 +61,7 @@ def print_assessment(
             tier_color = _TIER_COLORS.get(result.tier, "white")
             tier_display = result.tier.value.upper()
             if weight == SignalWeight.GATE:
-                if result.score < 0:
-                    tier_display = "FAIL"
-                elif result.details.get("needs_human"):
-                    tier_display = "REVIEW"
-                else:
-                    tier_display = "PASS"
+                tier_display = _gate_display(result)
             finding = result.summary
             if result.low_sample:
                 finding += " [dim](low sample)[/dim]"
@@ -109,19 +113,28 @@ def print_cached_notice(owner: str, repo: str, timestamp: str) -> None:
     stderr_console.print(f"  [dim]Using cached assessment from {timestamp}. Use --no-cache to refresh.[/dim]")
 
 
+def _summary_part(name: str, result: SignalResult) -> str | None:
+    """Pick the summary fragment a signal contributes to the paragraph, if any."""
+    lowered = name.lower()
+    if "merge" in lowered and result.score >= 0:
+        return result.summary
+    if "response" in lowered and result.tier != Tier.RED:
+        return f"{result.summary} median response time"
+    if "ghost" in lowered and result.score < 1.0:
+        return result.summary
+    if "ai policy" in lowered and result.score < 1.0:
+        return f"AI policy: {result.summary.lower()}"
+    return None
+
+
 def _build_summary(assessment: Assessment, signal_names: list[str]) -> str:
     """Build a natural-language summary paragraph from signal results."""
     parts = []
 
     for name, result in zip(signal_names, assessment.signals):
-        if "merge" in name.lower() and result.score >= 0:
-            parts.append(result.summary)
-        elif "response" in name.lower() and result.tier != Tier.RED:
-            parts.append(f"{result.summary} median response time")
-        elif "ghost" in name.lower() and result.score < 1.0:
-            parts.append(result.summary)
-        elif "ai policy" in name.lower() and result.score < 1.0:
-            parts.append(f"AI policy: {result.summary.lower()}")
+        part = _summary_part(name, result)
+        if part is not None:
+            parts.append(part)
 
     if not parts:
         if assessment.overall_tier == Tier.GREEN:

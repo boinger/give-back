@@ -64,6 +64,13 @@ def _render_section(heading: str, body: str) -> str:
     return f"## {heading}\n\n{body}"
 
 
+def _echo_preview(heading: str, body: str) -> None:
+    """Echo a rendered section in a preview gutter."""
+    click.echo(f"\n  ── {heading} ──")
+    for line in _render_section(heading, body).splitlines():
+        click.echo(f"  │ {line}")
+
+
 def run_wizard(has_coc: bool = True) -> str | None:
     """Interactive wizard that generates a CONTRIBUTING.md skeleton.
 
@@ -96,9 +103,7 @@ def run_wizard(has_coc: bool = True) -> str | None:
 
     if choice == "p":
         for heading, body in sections:
-            click.echo(f"\n  ── {heading} ──")
-            for line in _render_section(heading, body).splitlines():
-                click.echo(f"  │ {line}")
+            _echo_preview(heading, body)
         click.echo()
         choice = click.prompt(
             "  Include sections? [a]ll / [s]ome / [n]one",
@@ -121,9 +126,7 @@ def run_wizard(has_coc: bool = True) -> str | None:
                     show_choices=False,
                 )
                 if per_section == "p":
-                    click.echo(f"\n  ── {heading} ──")
-                    for line in _render_section(heading, body).splitlines():
-                        click.echo(f"  │ {line}")
+                    _echo_preview(heading, body)
                     click.echo()
                     continue
                 if per_section == "y":
