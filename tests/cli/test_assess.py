@@ -45,7 +45,7 @@ class TestAssessCachedPath:
     """Characterization tests for the cache-hit fast path (exit-code routing).
 
     Pinned before extracting the cached exits into a helper — see
-    plans/PLAN-sloppylint-cleanup.md (these lines were previously uncovered).
+    commit 8bfee2d (these lines were previously uncovered).
     """
 
     def _invoke_cached(self, assessment, args=None):
@@ -91,7 +91,7 @@ class TestAssessDepsEmit:
     """Characterization tests for the --deps emit block.
 
     Pinned before extracting the block into a helper — see
-    plans/PLAN-sloppylint-cleanup.md (these lines were previously uncovered).
+    commit 8bfee2d (these lines were previously uncovered).
     """
 
     def _invoke_deps(self, args, authenticated=True, walk_error=None):

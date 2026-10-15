@@ -1,7 +1,7 @@
 """Tests for the audit fix CLI command — fix-walk orchestration.
 
 Characterization tests pinned before extracting the fix-walk block into a
-helper — see plans/PLAN-sloppylint-cleanup.md (these lines were previously
+helper — see commit 8bfee2d (these lines were previously
 uncovered).
 
 The command gates on a real TTY (`sys.stdin.isatty()`), which CliRunner cannot

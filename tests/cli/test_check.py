@@ -88,7 +88,7 @@ class TestPrStatusDetection:
     """Characterization tests for the PR-detection block (check.py step 5.5).
 
     Pinned before extracting the block into a helper — see
-    plans/PLAN-sloppylint-cleanup.md (these lines were previously uncovered).
+    commit 8bfee2d (these lines were previously uncovered).
     """
 
     def _run_check(

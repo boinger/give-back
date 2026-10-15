@@ -70,7 +70,7 @@ class TestContributingWizardPreview:
     """Characterization tests for the preview branches.
 
     Pinned before extracting the per-section preview into a helper — see
-    plans/PLAN-sloppylint-cleanup.md (these branches were previously uncovered).
+    commit 8bfee2d (these branches were previously uncovered).
     """
 
     def test_per_section_preview_then_yes(self):

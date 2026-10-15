@@ -251,7 +251,7 @@ class TestIncompleteAssessment:
 
 # ---------------------------------------------------------------------------
 # _fetch_prs_paginated — characterization tests pinned before extracting the
-# page-boundary check into a helper (plans/PLAN-sloppylint-cleanup.md; the
+# page-boundary check into a helper (commit 8bfee2d; the
 # boundary branch was previously uncovered).
 # ---------------------------------------------------------------------------
 
