@@ -83,54 +83,54 @@ class TestCliHelp:
 
 
 class TestCheckCommand:
-    def test_check_not_in_workspace(self, tmp_path):
+    def test_check_not_in_workspace(self, tmp_path, monkeypatch):
         """Running check outside a workspace prints an error and exits 1."""
+        monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["check"])
-            assert result.exit_code == 1
-            assert "Not in a give-back workspace" in result.output
+        result = runner.invoke(cli, ["check"])
+        assert result.exit_code == 1
+        assert "Not in a give-back workspace" in result.output
 
-    def test_check_corrupt_context(self, tmp_path):
+    def test_check_corrupt_context(self, tmp_path, monkeypatch):
         """Running check with corrupt context.json prints an error and exits 1."""
+        monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            gb_dir = Path(".give-back")
-            gb_dir.mkdir()
-            (gb_dir / "context.json").write_text("not json")
-            result = runner.invoke(cli, ["check"])
-            assert result.exit_code == 1
-            assert "Cannot read brief" in result.output
+        gb_dir = Path(".give-back")
+        gb_dir.mkdir()
+        (gb_dir / "context.json").write_text("not json")
+        result = runner.invoke(cli, ["check"])
+        assert result.exit_code == 1
+        assert "Cannot read brief" in result.output
 
     @patch("give_back.cli.check.resolve_token", return_value=None)
     @patch("subprocess.run")
-    def test_check_in_workspace(self, mock_subprocess, mock_token, tmp_path):
+    def test_check_in_workspace(self, mock_subprocess, mock_token, tmp_path, monkeypatch):
         """Running check in a valid workspace runs guardrails and prints results."""
+        monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            gb_dir = Path(".give-back")
-            gb_dir.mkdir()
-            context = {
-                "upstream_owner": "pallets",
-                "repo": "flask",
-                "issue_number": 5432,
-                "branch_name": "fix/5432-typo",
-                "default_branch": "main",
-                "dco_required": False,
-                "ci_commands": ["pytest"],
-                "has_pr_template": False,
-            }
-            (gb_dir / "context.json").write_text(json.dumps(context))
+        gb_dir = Path(".give-back")
+        gb_dir.mkdir()
+        context = {
+            "upstream_owner": "pallets",
+            "repo": "flask",
+            "issue_number": 5432,
+            "branch_name": "fix/5432-typo",
+            "default_branch": "main",
+            "dco_required": False,
+            "ci_commands": ["pytest"],
+            "has_pr_template": False,
+        }
+        (gb_dir / "context.json").write_text(json.dumps(context))
 
-            # Mock subprocess for git commands
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = ""
-            mock_subprocess.return_value = mock_result
+        # Mock subprocess for git commands
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_subprocess.return_value = mock_result
 
-            result = runner.invoke(cli, ["check"])
-            assert result.exit_code == 0
-            assert "Pre-flight checks" in result.output
+        result = runner.invoke(cli, ["check"])
+        assert result.exit_code == 0
+        assert "Pre-flight checks" in result.output
 
 
 class TestPrepareCommand:

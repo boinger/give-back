@@ -46,61 +46,39 @@ def _setup_workspace(
 class TestAckCla:
     """Tests for give-back check --ack cla."""
 
-    def test_ack_cla_writes_marker(self, tmp_path):
+    def test_ack_cla_writes_marker(self, tmp_path, monkeypatch):
         """--ack cla writes cla_acknowledged to context.json."""
         workspace = _setup_workspace(tmp_path, cla_required=True)
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            # Symlink .give-back so CWD has it
-            import shutil
+        # Mock git commands (check runs git status, git log, etc.)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+            result = runner.invoke(check, ["--ack", "cla"])
 
-            src = workspace / ".give-back"
-            dst = Path.cwd() / ".give-back"
-            if not dst.exists():
-                shutil.copytree(src, dst)
+        assert result.exit_code == 0
+        ctx = json.loads((Path.cwd() / ".give-back" / "context.json").read_text())
+        assert ctx["cla_acknowledged"] is True
 
-            # Mock git commands (check runs git status, git log, etc.)
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
-                result = runner.invoke(check, ["--ack", "cla"])
-
-            assert result.exit_code == 0
-            ctx = json.loads((Path.cwd() / ".give-back" / "context.json").read_text())
-            assert ctx["cla_acknowledged"] is True
-
-    def test_ack_cla_no_cla_required(self, tmp_path):
+    def test_ack_cla_no_cla_required(self, tmp_path, monkeypatch):
         """--ack cla on a non-CLA project exits cleanly."""
         workspace = _setup_workspace(tmp_path, cla_required=False)
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            import shutil
-
-            src = workspace / ".give-back"
-            dst = Path.cwd() / ".give-back"
-            if not dst.exists():
-                shutil.copytree(src, dst)
-
-            result = runner.invoke(check, ["--ack", "cla"])
+        result = runner.invoke(check, ["--ack", "cla"])
 
         assert result.exit_code == 0
         assert "nothing to acknowledge" in result.output.lower()
 
-    def test_ack_unknown_guardrail(self, tmp_path):
+    def test_ack_unknown_guardrail(self, tmp_path, monkeypatch):
         """--ack with unknown guardrail name errors."""
         workspace = _setup_workspace(tmp_path)
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            import shutil
-
-            src = workspace / ".give-back"
-            dst = Path.cwd() / ".give-back"
-            if not dst.exists():
-                shutil.copytree(src, dst)
-
-            result = runner.invoke(check, ["--ack", "nonexistent"])
+        result = runner.invoke(check, ["--ack", "nonexistent"])
 
         assert result.exit_code == 1
         assert "Unknown guardrail" in result.output
@@ -116,19 +94,11 @@ class TestPrStatusDetection:
     def _run_check(
         self,
         runner: CliRunner,
-        workspace: Path,
         find_pr: object,
         dup_check_error: Exception | None = None,
         extra_args: list[str] | None = None,
     ):
-        """Invoke check in *workspace* with the API layer mocked out."""
-        import shutil
-
-        src = workspace / ".give-back"
-        dst = Path.cwd() / ".give-back"
-        if not dst.exists():
-            shutil.copytree(src, dst)
-
+        """Invoke check in the current directory with the API layer mocked out."""
         dup_result = GuardrailResult(name="duplicate_pr", severity=Severity.INFO, passed=True, message="none")
         dup_kwargs = {"side_effect": dup_check_error} if dup_check_error else {"return_value": dup_result}
 
@@ -144,14 +114,14 @@ class TestPrStatusDetection:
             result = runner.invoke(check, extra_args or [])
         return result, mock_find, mock_update
 
-    def test_open_pr_detected_updates_context(self, tmp_path):
+    def test_open_pr_detected_updates_context(self, tmp_path, monkeypatch):
         """An open PR for the branch records pr_open status and surfaces a pr_status result."""
         workspace = _setup_workspace(tmp_path, cla_required=False, fork_owner="me")
         pr = PrInfo(pr_number=42, pr_url="https://github.com/org/project/pull/42", state="open")
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            result, mock_find, mock_update = self._run_check(runner, workspace, find_pr=pr)
+        result, mock_find, mock_update = self._run_check(runner, find_pr=pr)
 
         assert result.exit_code == 0
         mock_find.assert_called_once()
@@ -161,52 +131,52 @@ class TestPrStatusDetection:
         assert args[2] == "https://github.com/org/project/pull/42"
         assert args[3] == 42
 
-    def test_merged_pr_records_merged_status(self, tmp_path):
+    def test_merged_pr_records_merged_status(self, tmp_path, monkeypatch):
         """A merged PR records status 'merged', not 'pr_open'."""
         workspace = _setup_workspace(tmp_path, cla_required=False, fork_owner="me")
         pr = PrInfo(pr_number=7, pr_url="https://github.com/org/project/pull/7", state="merged")
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            result, _mock_find, mock_update = self._run_check(runner, workspace, find_pr=pr)
+        result, _mock_find, mock_update = self._run_check(runner, find_pr=pr)
 
         assert result.exit_code == 0
         assert mock_update.call_args[0][1] == "merged"
 
-    def test_no_pr_found_leaves_context_untouched(self, tmp_path):
+    def test_no_pr_found_leaves_context_untouched(self, tmp_path, monkeypatch):
         """No PR for the branch: detection runs but nothing is recorded."""
         workspace = _setup_workspace(tmp_path, cla_required=False, fork_owner="me")
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            result, mock_find, mock_update = self._run_check(runner, workspace, find_pr=None)
+        result, mock_find, mock_update = self._run_check(runner, find_pr=None)
 
         assert result.exit_code == 0
         mock_find.assert_called_once()
         mock_update.assert_not_called()
 
-    def test_no_fork_owner_skips_pr_lookup(self, tmp_path):
+    def test_no_fork_owner_skips_pr_lookup(self, tmp_path, monkeypatch):
         """Without fork_owner (context or remote), the PR lookup is skipped entirely."""
         workspace = _setup_workspace(tmp_path, cla_required=False, fork_owner=None)
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            with patch("give_back.prepare.lifecycle.parse_fork_owner_from_remote", return_value=None):
-                result, mock_find, mock_update = self._run_check(runner, workspace, find_pr=None)
+        with patch("give_back.prepare.lifecycle.parse_fork_owner_from_remote", return_value=None):
+            result, mock_find, mock_update = self._run_check(runner, find_pr=None)
 
         assert result.exit_code == 0
         mock_find.assert_not_called()
         mock_update.assert_not_called()
 
-    def test_api_failure_skips_silently(self, tmp_path):
+    def test_api_failure_skips_silently(self, tmp_path, monkeypatch):
         """A GiveBackError inside the API block skips PR detection without failing the command."""
         workspace = _setup_workspace(tmp_path, cla_required=False, fork_owner="me")
 
+        monkeypatch.chdir(workspace)
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=workspace):
-            result, _mock_find, mock_update = self._run_check(
-                runner, workspace, find_pr=None, dup_check_error=GiveBackError("api down")
-            )
+        result, _mock_find, mock_update = self._run_check(
+            runner, find_pr=None, dup_check_error=GiveBackError("api down")
+        )
 
         assert result.exit_code == 0
         mock_update.assert_not_called()
